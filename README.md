@@ -5,7 +5,7 @@ Extract ComfyUI workflow JSON and A1111 prompts from images and videos.
 ## Installation
 
 ```bash
-npm install -g extract-prompts
+npm install -g @craftgear/extract-prompts
 ```
 
 ## Usage

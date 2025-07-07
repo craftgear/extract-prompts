@@ -5,7 +5,7 @@
 ## インストール
 
 ```bash
-npm install -g extract-prompts
+npm install -g @craftgear/extract-prompts
 ```
 
 ## 使い方
