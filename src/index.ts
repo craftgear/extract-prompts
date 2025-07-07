@@ -21,7 +21,7 @@ program
 program
   .argument('<files...>', 'Files to process (supports glob patterns)')
   .option('-o, --output <format>', 'Output format (json|pretty|raw)', 'json')
-  .option('-s, --save <directory>', 'Save workflows to directory')
+  .option('-s, --save [directory]', 'Save workflows to directory (defaults to input directory if not specified)')
   .option('-q, --quiet', 'Suppress non-error output')
   .option('--overwrite', 'Overwrite existing files when saving')
   .option('--name-pattern <pattern>', 'File naming pattern (source|sequential|timestamp)', 'source')
@@ -68,14 +68,17 @@ program
 
       const output = formatOutput(results, options.output);
       
-      if (options.save) {
-        await saveExtractedData(results as ExtractedData[], options.save, {
+      if (options.save !== undefined) {
+        // If --save is specified without directory, use the directory of the first input file
+        const saveDirectory = options.save || (allFiles.length > 0 ? dirname(allFiles[0]) : './extracted');
+        
+        await saveExtractedData(results as ExtractedData[], saveDirectory, {
           format: options.output as OutputFormat,
           overwrite: options.overwrite || false,
           namePattern: (options.namePattern as 'source' | 'sequential' | 'timestamp') || 'source',
           organize: (options.organize as 'none' | 'format' | 'date') || 'none'
         });
-        console.log(`Saved ${results.length} file(s) to ${options.save}`);
+        console.log(`Saved ${results.length} file(s) to ${saveDirectory}`);
       } else {
         console.log(output);
       }

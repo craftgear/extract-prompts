@@ -29,6 +29,9 @@ extract-prompts *.png --output pretty
 # Save extracted workflows to directory
 extract-prompts *.png --save ./workflows
 
+# Save to input file directory (uses directory of first input file)
+extract-prompts *.png --save
+
 # Quiet mode (suppress non-error output)
 extract-prompts *.png --quiet
 ```
@@ -36,7 +39,7 @@ extract-prompts *.png --quiet
 ## Options
 
 - `-o, --output <format>`: Output format (json|pretty|raw) [default: json]
-- `-s, --save <directory>`: Save workflows to directory
+- `-s, --save [directory]`: Save workflows to directory (defaults to input directory if not specified)
 - `-q, --quiet`: Suppress non-error output
 - `--overwrite`: Overwrite existing files when saving
 - `--name-pattern <pattern>`: File naming pattern (source|sequential|timestamp) [default: source]

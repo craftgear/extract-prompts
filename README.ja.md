@@ -29,6 +29,9 @@ extract-prompts *.png --output pretty
 # 抽出したワークフローをディレクトリに保存
 extract-prompts *.png --save ./workflows
 
+# 入力ファイルのディレクトリに保存（最初の入力ファイルのディレクトリを使用）
+extract-prompts *.png --save
+
 # 静寂モード（エラー以外の出力を抑制）
 extract-prompts *.png --quiet
 ```
@@ -36,7 +39,7 @@ extract-prompts *.png --quiet
 ## オプション
 
 - `-o, --output <format>`: 出力形式 (json|pretty|raw) [デフォルト: json]
-- `-s, --save <directory>`: ワークフローをディレクトリに保存
+- `-s, --save [directory]`: ワークフローをディレクトリに保存（未指定時は入力ディレクトリを使用）
 - `-q, --quiet`: エラー以外の出力を抑制
 - `--overwrite`: 保存時に既存ファイルを上書き
 - `--name-pattern <pattern>`: ファイル命名パターン (source|sequential|timestamp) [デフォルト: source]
