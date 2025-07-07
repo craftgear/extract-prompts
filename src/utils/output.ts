@@ -263,7 +263,8 @@ function extractComfyUIWorkflowData(workflow: any): ExtractedWorkflowData {
       classType === 'WanVideoTextEncode' ||
       classType?.includes('TextEncode') ||
       classType === 'Text Multiline' ||
-      classType === 'easy showAnything'
+      classType === 'easy showAnything' ||
+      classType === 'Load WanVideo Clip Encoder'
     ) {
       if (inputs.text || inputs.positive_prompt) {
         let text = inputs.text || inputs.positive_prompt;
