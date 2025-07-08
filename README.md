@@ -29,6 +29,9 @@ extract-prompts *.png --pretty
 # Save extracted workflows to directory
 extract-prompts *.png --save ./workflows
 
+# Save to directory with spaces (use quotes)
+extract-prompts *.png --save "output directory with spaces"
+
 # Save to input file directory (uses directory of first input file)
 extract-prompts *.png --save
 
@@ -115,6 +118,13 @@ extract-prompts workflow.webm --pretty
 ### Save workflows organized by date
 ```bash
 extract-prompts *.png --save ./extracted --organize date
+```
+
+### Save to directory with spaces
+```bash
+# Use quotes for directory paths with spaces
+extract-prompts *.png --save "My Output Directory"
+extract-prompts *.png --save 'Output Folder With Spaces'
 ```
 
 ### A1111 to ComfyUI Conversion

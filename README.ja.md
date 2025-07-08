@@ -29,6 +29,9 @@ extract-prompts *.png --pretty
 # 抽出したワークフローをディレクトリに保存
 extract-prompts *.png --save ./workflows
 
+# スペースを含むディレクトリに保存（クォートを使用）
+extract-prompts *.png --save "スペース付きディレクトリ"
+
 # 入力ファイルのディレクトリに保存（最初の入力ファイルのディレクトリを使用）
 extract-prompts *.png --save
 
@@ -113,6 +116,13 @@ extract-prompts workflow.webm --pretty
 ### 日付別に整理してワークフローを保存
 ```bash
 extract-prompts *.png --save ./extracted --organize date
+```
+
+### スペースを含むディレクトリに保存
+```bash
+# スペース付きディレクトリパスにはクォートを使用
+extract-prompts *.png --save "出力ディレクトリ"
+extract-prompts *.png --save 'スペース付きフォルダ'
 ```
 
 ### A1111からComfyUIへの変換

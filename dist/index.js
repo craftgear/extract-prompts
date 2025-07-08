@@ -15,11 +15,11 @@ const program = new commander_1.Command();
 program
     .name('extract-prompts')
     .description('Extract ComfyUI workflow JSON from images and videos')
-    .version('2.0.0');
+    .version('2.0.1');
 program
     .argument('<files...>', 'Files to process (supports glob patterns)')
     .option('-p, --pretty', 'Human-readable output format')
-    .option('-s, --save [directory]', 'Save workflows to directory (defaults to input directory if not specified)')
+    .option('-s, --save [directory]', 'Save workflows to directory (use quotes for paths with spaces, defaults to input directory if not specified)')
     .option('-q, --quiet', 'Suppress non-error output')
     .option('--overwrite', 'Overwrite existing files when saving')
     .option('--name-pattern <pattern>', 'File naming pattern (source|sequential|timestamp)', 'source')
@@ -32,6 +32,15 @@ program
         if (allFiles.length === 0) {
             console.error('No files found matching the specified patterns');
             process.exit(1);
+        }
+        // Detect potential unquoted directory paths with spaces
+        if (options.save && typeof options.save === 'string' &&
+            !options.save.includes(' ') &&
+            allFiles.some(f => !f.includes('.') && f.includes(' '))) {
+            console.warn('⚠️  Warning: Some arguments appear to be directory names with spaces.');
+            console.warn('   If you intended to specify a directory with spaces, use quotes:');
+            console.warn(`   --save "${options.save} ${allFiles.filter(f => !f.includes('.') && f.includes(' ')).join(' ')}"`);
+            console.warn('');
         }
         const results = [];
         for (const file of allFiles) {
@@ -86,8 +95,9 @@ program
         const output = (0, output_1.formatOutput)(results, options.pretty ? 'pretty' : 'json');
         if (options.save !== undefined) {
             // If --save is specified without directory, use the directory of the first input file
-            const saveDirectory = options.save ||
-                (allFiles.length > 0 ? (0, path_1.dirname)(allFiles[0]) : './extracted');
+            const saveDirectory = (typeof options.save === 'string')
+                ? options.save
+                : (allFiles.length > 0 ? (0, path_1.dirname)(allFiles[0]) : './extracted');
             await (0, save_1.saveExtractedData)(results, saveDirectory, {
                 format: (options.pretty ? 'pretty' : 'json'),
                 overwrite: options.overwrite || false,
