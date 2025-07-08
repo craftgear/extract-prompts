@@ -4,7 +4,8 @@ import {
   extractLoRATags,
   removeLoRATagsFromPrompt,
   extractUpscalerInfo,
-  shouldConvertToComfyUI
+  shouldConvertToComfyUI,
+  convertSamplerName
 } from './a1111-to-comfyui';
 import { A1111Parameters } from '../types';
 
@@ -532,6 +533,95 @@ describe('A1111 to ComfyUI Converter', () => {
         const maxLinkId = Math.max(...links.map((link: any) => link[0]));
         expect(workflow.last_link_id).toBe(maxLinkId);
       }
+    });
+  });
+
+  describe('convertSamplerName', () => {
+    it('should convert DPM++ samplers correctly', () => {
+      expect(convertSamplerName('DPM++ 2M Karras')).toEqual({
+        sampler: 'dpmpp_2m',
+        scheduler: 'karras'
+      });
+      
+      expect(convertSamplerName('DPM++ 2M')).toEqual({
+        sampler: 'dpmpp_2m',
+        scheduler: 'normal'
+      });
+      
+      expect(convertSamplerName('DPM++ SDE Karras')).toEqual({
+        sampler: 'dpmpp_sde',
+        scheduler: 'karras'
+      });
+      
+      expect(convertSamplerName('DPM++ 2S Karras')).toEqual({
+        sampler: 'dpmpp_2s_ancestral',
+        scheduler: 'karras'
+      });
+    });
+
+    it('should convert Euler samplers correctly', () => {
+      expect(convertSamplerName('Euler')).toEqual({
+        sampler: 'euler',
+        scheduler: 'normal'
+      });
+      
+      expect(convertSamplerName('Euler a')).toEqual({
+        sampler: 'euler_ancestral',
+        scheduler: 'normal'
+      });
+    });
+
+    it('should convert DPM2 samplers correctly', () => {
+      expect(convertSamplerName('DPM2')).toEqual({
+        sampler: 'dpm_2',
+        scheduler: 'normal'
+      });
+      
+      expect(convertSamplerName('DPM2 Karras')).toEqual({
+        sampler: 'dpm_2',
+        scheduler: 'karras'
+      });
+      
+      expect(convertSamplerName('DPM2 a')).toEqual({
+        sampler: 'dpm_2_ancestral',
+        scheduler: 'normal'
+      });
+    });
+
+    it('should convert LMS samplers correctly', () => {
+      expect(convertSamplerName('LMS')).toEqual({
+        sampler: 'lms',
+        scheduler: 'normal'
+      });
+      
+      expect(convertSamplerName('LMS Karras')).toEqual({
+        sampler: 'lms',
+        scheduler: 'karras'
+      });
+    });
+
+    it('should handle case insensitive input', () => {
+      expect(convertSamplerName('dpm++ 2m karras')).toEqual({
+        sampler: 'dpmpp_2m',
+        scheduler: 'karras'
+      });
+      
+      expect(convertSamplerName('EULER A')).toEqual({
+        sampler: 'euler_ancestral',
+        scheduler: 'normal'
+      });
+    });
+
+    it('should fallback to euler normal for unknown samplers', () => {
+      expect(convertSamplerName('Unknown Sampler')).toEqual({
+        sampler: 'euler',
+        scheduler: 'normal'
+      });
+      
+      expect(convertSamplerName('')).toEqual({
+        sampler: 'euler',
+        scheduler: 'normal'
+      });
     });
   });
 });

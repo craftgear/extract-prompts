@@ -8,6 +8,66 @@
 import { ComfyUIUIWorkflow, ComfyUIPrompt, LoRAInfo, UpscalerInfo, ConversionResult, ConversionOptions, A1111Parameters } from '../types';
 
 /**
+ * ComfyUI sampler and scheduler combination
+ */
+interface ComfyUISamplerConfig {
+  sampler: string;
+  scheduler: string;
+}
+
+/**
+ * A1111サンプラー名をComfyUIフォーマットに変換
+ * @param a1111Sampler A1111のサンプラー名
+ * @returns ComfyUIのサンプラーとスケジューラー設定
+ */
+export function convertSamplerName(a1111Sampler: string): ComfyUISamplerConfig {
+  const sampler = a1111Sampler.toLowerCase();
+  
+  // DPM++ series
+  if (sampler.includes('dpm++ 2m karras')) return { sampler: 'dpmpp_2m', scheduler: 'karras' };
+  if (sampler.includes('dpm++ 2m')) return { sampler: 'dpmpp_2m', scheduler: 'normal' };
+  if (sampler.includes('dpm++ sde karras')) return { sampler: 'dpmpp_sde', scheduler: 'karras' };
+  if (sampler.includes('dpm++ sde')) return { sampler: 'dpmpp_sde', scheduler: 'normal' };
+  if (sampler.includes('dpm++ 2s karras')) return { sampler: 'dpmpp_2s_ancestral', scheduler: 'karras' };
+  if (sampler.includes('dpm++ 2s')) return { sampler: 'dpmpp_2s_ancestral', scheduler: 'normal' };
+  if (sampler.includes('dpm++ 3m karras')) return { sampler: 'dpmpp_3m_sde', scheduler: 'karras' };
+  if (sampler.includes('dpm++ 3m')) return { sampler: 'dpmpp_3m_sde', scheduler: 'normal' };
+  
+  // DPM2 series - order matters: check specific variants first
+  if (sampler.includes('dpm2 a karras')) return { sampler: 'dpm_2_ancestral', scheduler: 'karras' };
+  if (sampler.includes('dpm2 a')) return { sampler: 'dpm_2_ancestral', scheduler: 'normal' };
+  if (sampler.includes('dpm2 karras')) return { sampler: 'dpm_2', scheduler: 'karras' };
+  if (sampler.includes('dpm2')) return { sampler: 'dpm_2', scheduler: 'normal' };
+  
+  // DPM fast/adaptive
+  if (sampler.includes('dpm fast')) return { sampler: 'dpm_fast', scheduler: 'normal' };
+  if (sampler.includes('dpm adaptive')) return { sampler: 'dpm_adaptive', scheduler: 'normal' };
+  
+  // Euler series
+  if (sampler.includes('euler a')) return { sampler: 'euler_ancestral', scheduler: 'normal' };
+  if (sampler.includes('euler')) return { sampler: 'euler', scheduler: 'normal' };
+  
+  // Heun
+  if (sampler.includes('heun')) return { sampler: 'heun', scheduler: 'normal' };
+  
+  // LMS series
+  if (sampler.includes('lms karras')) return { sampler: 'lms', scheduler: 'karras' };
+  if (sampler.includes('lms')) return { sampler: 'lms', scheduler: 'normal' };
+  
+  // UniPC
+  if (sampler.includes('unipc')) return { sampler: 'uni_pc', scheduler: 'normal' };
+  
+  // DDIM
+  if (sampler.includes('ddim')) return { sampler: 'ddim', scheduler: 'normal' };
+  
+  // PLMS
+  if (sampler.includes('plms')) return { sampler: 'plms', scheduler: 'normal' };
+  
+  // Default fallback
+  return { sampler: 'euler', scheduler: 'normal' };
+}
+
+/**
  * A1111パラメータからComfyUIワークフローに変換
  * @param parameters A1111パラメータ
  * @param options 変換オプション
@@ -36,13 +96,17 @@ export function convertA1111ToComfyUI(
       removeLoRATagsFromPrompt(parameters.positive_prompt || '') : 
       (parameters.positive_prompt || '');
 
+    // サンプラー設定を変換
+    const samplerConfig = convertSamplerName(parameters.sampler || 'DPM++ 2M Karras');
+
     // ComfyUIワークフローを生成
     const workflow = generateComfyUIWorkflow({
       positivePrompt: cleanedPositivePrompt,
       negativePrompt: parameters.negative_prompt || '',
       steps: parameters.steps ? parseInt(parameters.steps) : 20,
       cfg: parameters.cfg ? parseFloat(parameters.cfg) : 7.0,
-      sampler: parameters.sampler || 'DPM++ 2M Karras',
+      sampler: samplerConfig.sampler,
+      scheduler: samplerConfig.scheduler,
       seed: parameters.seed ? parseInt(parameters.seed) : 42,
       model: parameters.model || defaultModel,
       size: parameters.size || defaultSize,
@@ -130,6 +194,7 @@ interface WorkflowGenerationParams {
   steps: number;
   cfg: number;
   sampler: string;
+  scheduler: string;
   seed: number;
   model: string;
   size: string;
@@ -305,7 +370,7 @@ function generateComfyUIWorkflow(params: WorkflowGenerationParams): ComfyUIUIWor
   currentPos.y = 50;
   const ksamplerNodeId = createNode(
     'KSampler', 
-    [params.seed, 'randomize', params.steps, params.cfg, params.sampler, 'normal', 1.0], 
+    [params.seed, 'randomize', params.steps, params.cfg, params.sampler, params.scheduler, 1.0], 
     [
       { name: "model", type: "MODEL", link: null },
       { name: "positive", type: "CONDITIONING", link: null },
@@ -399,7 +464,7 @@ function generateComfyUIWorkflow(params: WorkflowGenerationParams): ComfyUIUIWor
     // Second KSampler for hires pass
     const hiresSamplerNodeId = createNode(
       'KSampler', 
-      [params.seed, 'randomize', params.upscaler.steps || 10, params.cfg, params.sampler, 'normal', params.upscaler.denoising || 0.5], 
+      [params.seed, 'randomize', params.upscaler.steps || 10, params.cfg, params.sampler, params.scheduler, params.upscaler.denoising || 0.5], 
       [
         { name: "model", type: "MODEL", link: null },
         { name: "positive", type: "CONDITIONING", link: null },
