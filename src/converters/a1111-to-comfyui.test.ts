@@ -203,16 +203,19 @@ describe('A1111 to ComfyUI Converter', () => {
       expect(result.workflow).toBeDefined();
       expect(result.originalParameters).toEqual(params);
       
-      // WorkflowにPromptが含まれているかチェック
-      expect(result.workflow?.prompt).toBeDefined();
+      // Workflow should have nodes array instead of prompt object
+      expect(result.workflow?.nodes).toBeDefined();
+      expect(result.workflow?.nodes).toBeInstanceOf(Array);
       
       // 基本的なノードが含まれているかチェック
-      const prompt = result.workflow?.prompt as any;
-      expect(Object.keys(prompt)).toContain('1'); // CheckpointLoader
-      expect(Object.keys(prompt)).toContain('2'); // CLIPTextEncode positive
-      expect(Object.keys(prompt)).toContain('3'); // CLIPTextEncode negative
-      expect(Object.keys(prompt)).toContain('4'); // EmptyLatentImage
-      expect(Object.keys(prompt)).toContain('5'); // KSampler
+      const nodes = result.workflow?.nodes as any[];
+      const nodeTypes = nodes.map(node => node.type);
+      expect(nodeTypes).toContain('CheckpointLoaderSimple');
+      expect(nodeTypes).toContain('CLIPTextEncode');
+      expect(nodeTypes).toContain('EmptyLatentImage');
+      expect(nodeTypes).toContain('KSampler');
+      expect(nodeTypes).toContain('VAEDecode');
+      expect(nodeTypes).toContain('SaveImage');
     });
 
     it('should handle LoRA tags in prompts', () => {
@@ -284,10 +287,10 @@ describe('A1111 to ComfyUI Converter', () => {
       expect(result.success).toBe(true);
       
       // LoRAタグが除去されていないことを確認
-      const prompt = result.workflow?.prompt as any;
-      const positiveNode = Object.values(prompt).find((node: any) => 
-        node.class_type === 'CLIPTextEncode' && 
-        node.inputs?.text?.includes('<lora:style:1.0>')
+      const nodes = result.workflow?.nodes as any[];
+      const positiveNode = nodes.find((node: any) => 
+        node.type === 'CLIPTextEncode' && 
+        node.widgets_values?.[0]?.includes('<lora:style:1.0>')
       );
       expect(positiveNode).toBeDefined();
     });
@@ -301,6 +304,234 @@ describe('A1111 to ComfyUI Converter', () => {
       expect(result.success).toBe(true);
       expect(result.workflow).toBeDefined();
       expect(result.originalParameters).toEqual(params);
+    });
+  });
+
+  // ComfyUI UI Workflow Format Tests
+  describe('ComfyUI Workflow Format', () => {
+    it('should generate workflow with required top-level fields', () => {
+      const params: A1111Parameters = {
+        positive_prompt: 'test prompt',
+        negative_prompt: 'test negative',
+        steps: '20',
+        cfg: '7',
+        seed: '42'
+      };
+
+      const result = convertA1111ToComfyUI(params);
+      
+      expect(result.success).toBe(true);
+      expect(result.workflow).toBeDefined();
+      
+      const workflow = result.workflow!;
+      
+      // Required top-level fields for ComfyUI UI workflow format
+      expect(workflow).toHaveProperty('version');
+      expect(workflow).toHaveProperty('last_node_id');
+      expect(workflow).toHaveProperty('last_link_id');
+      expect(workflow).toHaveProperty('nodes');
+      expect(workflow).toHaveProperty('links');
+      expect(workflow).toHaveProperty('groups');
+      expect(workflow).toHaveProperty('config');
+      expect(workflow).toHaveProperty('extra');
+    });
+
+    it('should have correct version field', () => {
+      const params: A1111Parameters = { positive_prompt: 'test' };
+      const result = convertA1111ToComfyUI(params);
+      
+      expect(result.workflow?.version).toBe(0.4);
+    });
+
+    it('should generate nodes as array with proper structure', () => {
+      const params: A1111Parameters = {
+        positive_prompt: 'test prompt',
+        steps: '20'
+      };
+
+      const result = convertA1111ToComfyUI(params);
+      
+      expect(result.workflow?.nodes).toBeInstanceOf(Array);
+      expect(result.workflow?.nodes.length).toBeGreaterThan(0);
+      
+      // Check first node structure
+      const firstNode = result.workflow?.nodes[0];
+      expect(firstNode).toHaveProperty('id');
+      expect(firstNode).toHaveProperty('type');
+      expect(firstNode).toHaveProperty('pos');
+      expect(firstNode).toHaveProperty('size');
+      expect(firstNode).toHaveProperty('flags');
+      expect(firstNode).toHaveProperty('order');
+      expect(firstNode).toHaveProperty('mode');
+      expect(firstNode).toHaveProperty('inputs');
+      expect(firstNode).toHaveProperty('outputs');
+      expect(firstNode).toHaveProperty('properties');
+      expect(firstNode).toHaveProperty('widgets_values');
+    });
+
+    it('should generate links as array of connection tuples', () => {
+      const params: A1111Parameters = {
+        positive_prompt: 'test prompt',
+        steps: '20'
+      };
+
+      const result = convertA1111ToComfyUI(params);
+      
+      expect(result.workflow?.links).toBeInstanceOf(Array);
+      
+      // Each link should be an array of 6 elements: [link_id, output_node_id, output_slot, input_node_id, input_slot, type]
+      result.workflow?.links.forEach((link: any) => {
+        expect(Array.isArray(link)).toBe(true);
+        expect(link).toHaveLength(6);
+        expect(typeof link[0]).toBe('number'); // link_id
+        expect(typeof link[1]).toBe('number'); // output_node_id
+        expect(typeof link[2]).toBe('number'); // output_slot
+        expect(typeof link[3]).toBe('number'); // input_node_id
+        expect(typeof link[4]).toBe('number'); // input_slot
+        expect(typeof link[5]).toBe('string'); // type
+      });
+    });
+
+    it('should include basic ComfyUI nodes', () => {
+      const params: A1111Parameters = {
+        positive_prompt: 'test prompt',
+        steps: '20'
+      };
+
+      const result = convertA1111ToComfyUI(params);
+      const nodes = result.workflow?.nodes || [];
+      
+      // Check for essential node types
+      const nodeTypes = nodes.map((node: any) => node.type);
+      expect(nodeTypes).toContain('CheckpointLoaderSimple');
+      expect(nodeTypes).toContain('CLIPTextEncode'); // Should appear twice (positive/negative)
+      expect(nodeTypes).toContain('EmptyLatentImage');
+      expect(nodeTypes).toContain('KSampler');
+      expect(nodeTypes).toContain('VAEDecode');
+      expect(nodeTypes).toContain('SaveImage');
+    });
+
+    it('should generate LoRA nodes when LoRAs are present', () => {
+      const params: A1111Parameters = {
+        positive_prompt: 'test <lora:style1:0.8> <lora:style2:0.6>',
+        steps: '20'
+      };
+
+      const result = convertA1111ToComfyUI(params);
+      const nodes = result.workflow?.nodes || [];
+      
+      // Should have LoraLoader nodes
+      const loraNodes = nodes.filter((node: any) => node.type === 'LoraLoader');
+      expect(loraNodes).toHaveLength(2);
+      
+      // Check LoRA node widgets_values contain LoRA names and strengths
+      const firstLoraNode = loraNodes[0];
+      expect(firstLoraNode.widgets_values).toContain('style1.safetensors');
+      expect(firstLoraNode.widgets_values).toContain(0.8);
+    });
+
+    it('should generate upscaler nodes when hires.fix is enabled', () => {
+      const params: A1111Parameters = {
+        positive_prompt: 'test',
+        hires_fix: 'true',
+        hires_upscaler: 'ESRGAN_4x',
+        hires_steps: '15'
+      };
+
+      const result = convertA1111ToComfyUI(params);
+      const nodes = result.workflow?.nodes || [];
+      
+      // Should have additional nodes for upscaling
+      const nodeTypes = nodes.map((node: any) => node.type);
+      expect(nodeTypes).toContain('UpscaleModelLoader');
+      expect(nodeTypes).toContain('ImageUpscaleWithModel');
+      
+      // Should have two KSampler nodes (base + hires)
+      const ksamplerNodes = nodes.filter((node: any) => node.type === 'KSampler');
+      expect(ksamplerNodes.length).toBe(2);
+    });
+
+    it('should have proper node positioning', () => {
+      const params: A1111Parameters = {
+        positive_prompt: 'test prompt',
+        steps: '20'
+      };
+
+      const result = convertA1111ToComfyUI(params);
+      const nodes = result.workflow?.nodes || [];
+      
+      // All nodes should have valid positions
+      nodes.forEach((node: any) => {
+        expect(Array.isArray(node.pos)).toBe(true);
+        expect(node.pos).toHaveLength(2);
+        expect(typeof node.pos[0]).toBe('number'); // x coordinate
+        expect(typeof node.pos[1]).toBe('number'); // y coordinate
+        
+        expect(Array.isArray(node.size)).toBe(true);
+        expect(node.size).toHaveLength(2);
+        expect(typeof node.size[0]).toBe('number'); // width
+        expect(typeof node.size[1]).toBe('number'); // height
+      });
+    });
+
+    it('should have incrementing node IDs', () => {
+      const params: A1111Parameters = {
+        positive_prompt: 'test prompt',
+        steps: '20'
+      };
+
+      const result = convertA1111ToComfyUI(params);
+      const nodes = result.workflow?.nodes || [];
+      
+      // Node IDs should be unique and incrementing
+      const nodeIds = nodes.map((node: any) => node.id);
+      const uniqueIds = new Set(nodeIds);
+      
+      expect(uniqueIds.size).toBe(nodeIds.length); // All IDs should be unique
+      expect(Math.min(...nodeIds)).toBe(1); // Should start from 1
+      expect(Math.max(...nodeIds)).toBe(nodeIds.length); // Should be consecutive
+    });
+
+    it('should generate correct link connections', () => {
+      const params: A1111Parameters = {
+        positive_prompt: 'test prompt',
+        steps: '20'
+      };
+
+      const result = convertA1111ToComfyUI(params);
+      const nodes = result.workflow?.nodes || [];
+      const links = result.workflow?.links || [];
+      
+      // Verify that all link node IDs reference actual nodes
+      const nodeIds = new Set(nodes.map((node: any) => node.id));
+      
+      links.forEach((link: any) => {
+        const [, outputNodeId, , inputNodeId] = link;
+        expect(nodeIds.has(outputNodeId)).toBe(true);
+        expect(nodeIds.has(inputNodeId)).toBe(true);
+      });
+    });
+
+    it('should track last_node_id and last_link_id correctly', () => {
+      const params: A1111Parameters = {
+        positive_prompt: 'test prompt',
+        steps: '20'
+      };
+
+      const result = convertA1111ToComfyUI(params);
+      const workflow = result.workflow!;
+      const nodes = workflow.nodes || [];
+      const links = workflow.links || [];
+      
+      // last_node_id should equal the highest node ID
+      const maxNodeId = Math.max(...nodes.map((node: any) => node.id));
+      expect(workflow.last_node_id).toBe(maxNodeId);
+      
+      // last_link_id should equal the highest link ID
+      if (links.length > 0) {
+        const maxLinkId = Math.max(...links.map((link: any) => link[0]));
+        expect(workflow.last_link_id).toBe(maxLinkId);
+      }
     });
   });
 });

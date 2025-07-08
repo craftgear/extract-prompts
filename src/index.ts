@@ -81,6 +81,7 @@ program
               const conversionResult = convertA1111ToComfyUI(result.parameters);
               if (conversionResult.success && conversionResult.workflow) {
                 processedResult.workflow = conversionResult.workflow;
+                
                 if (!options.quiet) {
                   console.log(
                     `Converted A1111 parameters to ComfyUI workflow for ${file}`
@@ -140,25 +141,72 @@ program
         process.exit(1);
       }
 
-      const output = formatOutput(results, options.pretty ? 'pretty' : 'json');
+      // Handle A1111 to ComfyUI conversion output differently  
+      if (options.convertA1111) {
+        const workflowResults = results.filter(result => result.workflow);
+        
+        if (workflowResults.length === 0) {
+          console.error('No workflows generated from A1111 conversion');
+          process.exit(1);
+        }
+        
+        // Always save individual workflow files when using --convert-a1111
+        let savedFiles = 0;
+        for (const result of workflowResults) {
+          const outputPath = join(
+            dirname(result.file),
+            basename(result.file, extname(result.file)) + '_workflow.json'
+          );
+          const workflowContent = JSON.stringify(result.workflow, null, 2);
+          writeFileSync(outputPath, workflowContent);
+          
+          if (!options.quiet) {
+            console.log(`Saved ComfyUI workflow: ${outputPath}`);
+          }
+          savedFiles++;
+        }
+        
+        if (!options.quiet) {
+          console.log(`Generated ${savedFiles} ComfyUI workflow file(s)`);
+        }
+        
+        // Handle additional --save option if specified (for saving in different location)
+        if (options.save !== undefined) {
+          const saveDirectory = (typeof options.save === 'string') 
+            ? options.save 
+            : (allFiles.length > 0 ? dirname(allFiles[0]) : './extracted');
 
-      if (options.save !== undefined) {
-        // If --save is specified without directory, use the directory of the first input file
-        const saveDirectory = (typeof options.save === 'string') 
-          ? options.save 
-          : (allFiles.length > 0 ? dirname(allFiles[0]) : './extracted');
-
-        await saveExtractedData(results as ExtractedData[], saveDirectory, {
-          format: (options.pretty ? 'pretty' : 'json') as OutputFormat,
-          overwrite: options.overwrite || false,
-          namePattern:
-            (options.namePattern as 'source' | 'sequential' | 'timestamp') ||
-            'source',
-          organize: (options.organize as 'none' | 'format' | 'date') || 'none',
-        });
-        console.log(`Saved ${results.length} file(s) to ${saveDirectory}`);
+          await saveExtractedData(results as ExtractedData[], saveDirectory, {
+            format: (options.pretty ? 'pretty' : 'json') as OutputFormat,
+            overwrite: options.overwrite || false,
+            namePattern:
+              (options.namePattern as 'source' | 'sequential' | 'timestamp') ||
+              'source',
+            organize: (options.organize as 'none' | 'format' | 'date') || 'none',
+          });
+          console.log(`Also saved ${results.length} file(s) to ${saveDirectory}`);
+        }
       } else {
-        console.log(output);
+        // Normal extraction mode
+        const output = formatOutput(results, options.pretty ? 'pretty' : 'json');
+
+        if (options.save !== undefined) {
+          const saveDirectory = (typeof options.save === 'string') 
+            ? options.save 
+            : (allFiles.length > 0 ? dirname(allFiles[0]) : './extracted');
+
+          await saveExtractedData(results as ExtractedData[], saveDirectory, {
+            format: (options.pretty ? 'pretty' : 'json') as OutputFormat,
+            overwrite: options.overwrite || false,
+            namePattern:
+              (options.namePattern as 'source' | 'sequential' | 'timestamp') ||
+              'source',
+            organize: (options.organize as 'none' | 'format' | 'date') || 'none',
+          });
+          console.log(`Saved ${results.length} file(s) to ${saveDirectory}`);
+        } else {
+          console.log(output);
+        }
       }
     } catch (error) {
       console.error('Error:', (error as Error).message);

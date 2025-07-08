@@ -137,8 +137,8 @@ describe('PNG Extractor', () => {
       
       expect(result).toBeDefined();
       expect(result?.workflow).toBeDefined();
-      expect(result?.workflow!['1']).toBeDefined();
-      expect(result?.workflow!['1'].class_type).toBe('CheckpointLoaderSimple');
+      expect((result?.workflow as any)['1']).toBeDefined();
+      expect((result?.workflow as any)['1'].class_type).toBe('CheckpointLoaderSimple');
     });
 
     it('should return null when no relevant text chunks are found', async () => {
