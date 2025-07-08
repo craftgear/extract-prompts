@@ -1,6 +1,6 @@
 # extract-prompts
 
-画像や動画からComfyUIワークフローとA1111のプロンプトを抽出します。
+画像や動画からComfyUIワークフローとA1111のプロンプトを抽出するコマンドラインツールです。
 
 ## インストール
 
@@ -24,7 +24,7 @@ extract-prompts image.png
 extract-prompts *.png *.webm
 
 # 読みやすい形式で出力
-extract-prompts *.png --output pretty
+extract-prompts *.png --pretty
 
 # 抽出したワークフローをディレクトリに保存
 extract-prompts *.png --save ./workflows
@@ -32,18 +32,26 @@ extract-prompts *.png --save ./workflows
 # 入力ファイルのディレクトリに保存（最初の入力ファイルのディレクトリを使用）
 extract-prompts *.png --save
 
+# A1111パラメータをComfyUIワークフロー形式に変換
+extract-prompts a1111_image.png --convert-a1111
+
+# 変換と読みやすい出力を組み合わせ
+extract-prompts a1111_image.png --convert-a1111 --pretty
+
 # 静寂モード（エラー以外の出力を抑制）
 extract-prompts *.png --quiet
 ```
 
 ## オプション
 
-- `-o, --output <format>`: 出力形式 (json|pretty|raw) [デフォルト: json]
+- `-p, --pretty`: 読みやすい出力形式（デフォルト: JSON）
 - `-s, --save [directory]`: ワークフローをディレクトリに保存（未指定時は入力ディレクトリを使用）
 - `-q, --quiet`: エラー以外の出力を抑制
 - `--overwrite`: 保存時に既存ファイルを上書き
 - `--name-pattern <pattern>`: ファイル命名パターン (source|sequential|timestamp) [デフォルト: source]
 - `--organize <mode>`: 保存ファイルの整理 (none|format|date) [デフォルト: none]
+- `--json-file`: 入力ファイルと同じ名前でJSONファイルを作成
+- `--convert-a1111`: A1111パラメータをComfyUIワークフロー形式に変換
 
 ## 対応フォーマット
 
@@ -60,25 +68,22 @@ extract-prompts *.png --quiet
 ## 出力形式
 
 ### JSON (デフォルト)
-完全なワークフローデータを含む生のJSON出力。
+完全なワークフローデータを含むJSON出力
 
-### Pretty
+### Pretty (--prettyフラグ)
 人間が読みやすい形式で以下を表示:
 - LoRAモデルと強度
 - プロンプト（検出時はポジティブ/ネガティブ）
 - サンプラー設定（ステップ、CFG、スケジューラー、シード）
 - モデル情報
-- ワークフロー統計
-
-### Raw
-ワークフローJSONのみのシンプルな形式。
 
 ## 機能
 
 - **ComfyUIワークフロー抽出**: ComfyUI生成コンテンツから完全なワークフローJSONを抽出
+- **A1111からComfyUIへの変換**: A1111パラメータをComfyUIワークフロー形式に変換（LoRAとアップスケーラー完全対応）
 - **プロンプト検出**: 様々なノードタイプからプロンプトを賢く識別・抽出
 - **LoRA対応**: 複数のローダー形式からLoRAモデルとその強度を抽出
-- **保守的ラベリング**: 確信がある場合のみポジティブ/ネガティブの区別を表示
+- **アップスケーラー対応**: 変換時にhires.fixとアップスケーラーパラメータを処理
 - **バッチ処理**: グロブパターンで複数ファイルを一度に処理
 - **柔軟な出力**: 様々な用途に対応した複数の出力形式
 
@@ -102,12 +107,26 @@ extract-prompts generated_image.png
 
 ### LoRAとプロンプトの詳細を含む読みやすい形式
 ```bash
-extract-prompts workflow.webm --output pretty
+extract-prompts workflow.webm --pretty
 ```
 
 ### 日付別に整理してワークフローを保存
 ```bash
 extract-prompts *.png --save ./extracted --organize date
+```
+
+### A1111からComfyUIへの変換
+```bash
+# A1111パラメータをComfyUIワークフローに変換
+extract-prompts a1111_image.png --convert-a1111
+
+# A1111プロンプトのLoRAタグの例:
+# "beautiful girl <lora:style1:0.8> <lora:character:0.6>, masterpiece"
+# LoRAローダーノードを含むComfyUIワークフローを生成
+
+# アップスケーラーパラメータの例:
+# Hires.fix: true, Hires upscaler: ESRGAN_4x, Hires steps: 10, Hires denoising: 0.5
+# 2パス生成用のアップスケーラーノードを含むComfyUIワークフローを生成
 ```
 
 ## ライセンス

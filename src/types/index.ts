@@ -200,9 +200,67 @@ export interface ExtractorOptions {
 }
 
 /**
+ * LoRA情報の構造
+ */
+export interface LoRAInfo {
+  /** LoRAモデル名 */
+  name: string;
+  /** LoRA強度 */
+  strength: number;
+  /** LoRAファイルパス */
+  path?: string;
+}
+
+/**
+ * アップスケーラー情報の構造
+ */
+export interface UpscalerInfo {
+  /** アップスケーラーモデル名 */
+  model: string;
+  /** ハイレゾステップ数 */
+  steps?: number;
+  /** ハイレゾデノイズ強度 */
+  denoising?: number;
+  /** アップスケール倍率 */
+  scale?: number;
+}
+
+/**
+ * A1111からComfyUIへの変換結果
+ */
+export interface ConversionResult {
+  /** 変換成功フラグ */
+  success: boolean;
+  /** 生成されたComfyUIワークフロー */
+  workflow?: ComfyUIWorkflow;
+  /** 検出されたLoRAリスト */
+  loras?: LoRAInfo[];
+  /** 検出されたアップスケーラー情報 */
+  upscaler?: UpscalerInfo;
+  /** 変換エラーメッセージ */
+  error?: string;
+  /** 元のA1111パラメータ */
+  originalParameters?: A1111Parameters;
+}
+
+/**
+ * A1111からComfyUIへの変換オプション
+ */
+export interface ConversionOptions {
+  /** プロンプトからLoRAタグを除去するか */
+  removeLoRATags?: boolean;
+  /** デフォルトのモデル名 */
+  defaultModel?: string;
+  /** デフォルトの画像サイズ */
+  defaultSize?: string;
+  /** ノードIDの開始番号 */
+  startNodeId?: number;
+}
+
+/**
  * サポートされる出力フォーマット
  */
-export type OutputFormat = 'json' | 'pretty' | 'raw';
+export type OutputFormat = 'json' | 'pretty';
 
 /**
  * 保存オプション

@@ -2,7 +2,7 @@
  * Output formatting utilities for extracted workflow data
  *
  * This module provides functions to format extracted ComfyUI workflow data
- * into various output formats including JSON, human-readable, and raw formats.
+ * into various output formats including JSON and human-readable formats.
  *
  * @fileoverview Output formatting and data presentation utilities
  */
@@ -14,7 +14,7 @@ import { ExtractedData, OutputFormat, ExtractedWorkflowData } from '../types';
  * Formats extraction results into the specified output format
  *
  * @param results - Array of extracted data from files
- * @param format - Output format ('json', 'pretty', or 'raw')
+ * @param format - Output format ('json' or 'pretty')
  * @returns Formatted string representation of the results
  *
  * @example
@@ -35,8 +35,6 @@ export function formatOutput(
     case 'pretty':
       return formatPretty(results);
 
-    case 'raw':
-      return formatRaw(results);
 
     default:
       return JSON.stringify(results, null, 2);
@@ -428,14 +426,3 @@ function mergePromptPairs(
   return result;
 }
 
-function formatRaw(results: ExtractedData[]): string {
-  let output = '';
-
-  for (const result of results) {
-    if (result.workflow) {
-      output += `${result.file}: ${JSON.stringify(result.workflow)}\n`;
-    }
-  }
-
-  return output;
-}

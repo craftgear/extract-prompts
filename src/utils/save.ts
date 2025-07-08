@@ -7,8 +7,8 @@ import { ExtractedData } from '../types';
  * Save options
  */
 export interface SaveOptions {
-  /** Output format (json, pretty, raw) */
-  format?: 'json' | 'pretty' | 'raw';
+  /** Output format (json, pretty) */
+  format?: 'json' | 'pretty';
   /** Whether to overwrite existing files */
   overwrite?: boolean;
   /** File name pattern */
@@ -61,8 +61,6 @@ export async function saveExtractedData(
         content = JSON.stringify([item], null, 2);
       } else if (format === 'pretty') {
         content = formatOutput([item], 'pretty');
-      } else if (format === 'raw') {
-        content = formatOutput([item], 'raw');
       } else {
         content = JSON.stringify([item], null, 2);
       }
@@ -168,8 +166,6 @@ function getFileExtension(format: string): string {
     case 'json':
       return '.json';
     case 'pretty':
-      return '.txt';
-    case 'raw':
       return '.txt';
     default:
       return '.json';

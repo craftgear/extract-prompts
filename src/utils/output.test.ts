@@ -50,14 +50,6 @@ describe('formatOutput', () => {
     expect(output).toContain('KSampler');
   });
 
-  it('should format as raw output', () => {
-    const output = formatOutput(sampleResults, 'raw');
-    
-    expect(output).toContain('test1.png:');
-    expect(output).toContain('test2.png:');
-    expect(output).toContain(JSON.stringify(sampleResults[0].workflow));
-    expect(output).toContain(JSON.stringify(sampleResults[1].workflow));
-  });
 
   it('should handle results without workflow', () => {
     const resultsNoWorkflow = [
@@ -69,8 +61,6 @@ describe('formatOutput', () => {
     const prettyOutput = formatOutput(resultsNoWorkflow, 'pretty');
     expect(prettyOutput).toContain('No workflow found');
     
-    const rawOutput = formatOutput(resultsNoWorkflow, 'raw');
-    expect(rawOutput).toBe(''); // No workflow means no raw output
   });
 
   it('should handle empty results', () => {
@@ -82,8 +72,6 @@ describe('formatOutput', () => {
     const prettyOutput = formatOutput(emptyResults, 'pretty');
     expect(prettyOutput).toBe('');
     
-    const rawOutput = formatOutput(emptyResults, 'raw');
-    expect(rawOutput).toBe('');
   });
 
   it('should default to json for unknown format', () => {
