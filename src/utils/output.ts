@@ -25,19 +25,19 @@ import { ExtractedData, OutputFormat, ExtractedWorkflowData } from '../types';
  * ```
  */
 export function formatOutput(
-  results: ExtractedData[],
+  file: string,
+  result: ExtractedData,
   format: OutputFormat
 ): string {
   switch (format) {
     case 'json':
-      return JSON.stringify(results, null, 2);
+      return JSON.stringify(result, null, 2);
 
     case 'pretty':
-      return formatPretty(results);
-
+      return formatPretty(file, result);
 
     default:
-      return JSON.stringify(results, null, 2);
+      return JSON.stringify(result, null, 2);
   }
 }
 
@@ -47,127 +47,127 @@ export function formatOutput(
  * Creates a detailed, structured output that's easy to read, including
  * workflow statistics, LoRA models, prompts, and generation settings.
  *
- * @param results - Array of extracted data to format
+ * @param result - Array of extracted data to format
  * @returns Human-readable formatted string
  */
-function formatPretty(results: ExtractedData[]): string {
+function formatPretty(file: string, result: ExtractedData): string {
   let output = '';
 
-  for (const result of results) {
-    output += `\n=== ${result.file} ===\n`;
+  output += `\n=== ${file} ===\n`;
 
-    if (result.workflow) {
-      const workflowData = extractComfyUIWorkflowData(result.workflow);
+  if (result.workflow) {
+    const workflowData = extractComfyUIWorkflowData(result.workflow);
 
-      output += `ComfyUI Workflow:\n`;
+    output += `ComfyUI Workflow:\n`;
 
-      // Display LoRA models
-      if (workflowData.loras.length > 0) {
-        output += `\nLoRA Models:\n`;
-        workflowData.loras.forEach((lora, index) => {
-          output += `  ${index + 1}. ${lora.name} (strength: ${lora.strength})\n`;
-        });
-      }
-
-      // Display text encoding prompts
-      if (workflowData.prompts.length > 0) {
-        output += `\nPrompts:\n`;
-
-        // Only show positive/negative labels if we're very confident about the distinction
-        // This means we found clear KSampler connections and have both types
-        const hasPositive = workflowData.prompts.some(
-          (p) => p.positive && p.positive !== ''
-        );
-        const hasNegative = workflowData.prompts.some((p) => p.negative);
-        // Only show positive/negative distinction when:
-        // 1. We have both types of prompts
-        // 2. We have a small number of prompts (clear pairing)
-        // 3. The positive and negative prompts are clearly distinct content
-        const hasConfidentDistinction = hasPositive && hasNegative && 
-          workflowData.prompts.length <= 2 &&
-          workflowData.prompts.some(p => p.positive && p.negative && 
-            p.positive !== p.negative); // Ensure they're actually different
-        
-        const shouldDistinguish = hasConfidentDistinction;
-
-        workflowData.prompts.forEach((prompt, index) => {
-          if (prompt.positive && prompt.positive !== '') {
-            if (shouldDistinguish) {
-              output += `  Positive ${index + 1}: ${prompt.positive}\n`;
-            } else {
-              output += `  ${index + 1}: ${prompt.positive}\n`;
-            }
-          }
-
-          if (prompt.negative) {
-            if (shouldDistinguish) {
-              output += `\n  Negative ${index + 1}: ${prompt.negative}\n`;
-            } else {
-              output += `  ${index + 1}: ${prompt.negative}\n`;
-            }
-          }
-        });
-      }
-
-      // Sampler settings
-      if (workflowData.samplerSettings) {
-        const s = workflowData.samplerSettings;
-        output += `\nSampler Settings:\n`;
-        if (s.steps) output += `  Steps: ${s.steps}\n`;
-        if (s.cfg !== undefined) output += `  CFG Scale: ${s.cfg}\n`;
-        if (s.cfg_start !== undefined && s.cfg_end !== undefined) {
-          output += `  CFG Schedule: ${s.cfg_start} → ${s.cfg_end}\n`;
-        }
-        if (s.scheduler) output += `  Scheduler: ${s.scheduler}\n`;
-        if (s.seed !== undefined) output += `  Seed: ${s.seed}\n`;
-        if (s.denoise !== undefined) output += `  Denoise: ${s.denoise}\n`;
-      }
-
-      // Model info
-      if (workflowData.models.length > 0) {
-        output += `\nModels:\n`;
-        workflowData.models.forEach((model, index) => {
-          output += `  ${index + 1}. ${model}\n`;
-        });
-      }
-
-      // Basic stats
-      const info = extractWorkflowInfo(result.workflow);
-      output += `\nWorkflow Stats:\n`;
-      output += `  Total Nodes: ${info.nodeCount}\n`;
-      output += `  Node Types: ${info.nodeTypes.slice(0, 5).join(', ')}${info.nodeTypes.length > 5 ? '...' : ''}\n`;
-    } else if (result.parameters) {
-      // Handle A1111-style parameters
-      output += `A1111-style Parameters:\n`;
-
-      if (result.parameters.positive_prompt) {
-        output += `\nPrompts:\n`;
-        output += `  Positive: ${result.parameters.positive_prompt}\n`;
-        if (result.parameters.negative_prompt) {
-          output += `\n  Negative: ${result.parameters.negative_prompt}\n`;
-        }
-      }
-
-      output += `\nGeneration Settings:\n`;
-      if (result.parameters.steps)
-        output += `  Steps: ${result.parameters.steps}\n`;
-      if (result.parameters.cfg)
-        output += `  CFG Scale: ${result.parameters.cfg}\n`;
-      if (result.parameters.sampler)
-        output += `  Sampler: ${result.parameters.sampler}\n`;
-      if (result.parameters.seed)
-        output += `  Seed: ${result.parameters.seed}\n`;
-      if (result.parameters.model)
-        output += `  Model: ${result.parameters.model}\n`;
-    } else if (result.metadata) {
-      output += `Metadata found:\n`;
-      output += `  ${result.metadata.substring(0, 200)}${result.metadata.length > 200 ? '...' : ''}\n`;
-    } else {
-      output += `No workflow found\n`;
+    // Display LoRA models
+    if (workflowData.loras.length > 0) {
+      output += `\nLoRA Models:\n`;
+      workflowData.loras.forEach((lora, index) => {
+        output += `  ${index + 1}. ${lora.name} (strength: ${lora.strength})\n`;
+      });
     }
 
-    output += '\n';
+    // Display text encoding prompts
+    if (workflowData.prompts.length > 0) {
+      output += `\nPrompts:\n`;
+
+      // Only show positive/negative labels if we're very confident about the distinction
+      // This means we found clear KSampler connections and have both types
+      const hasPositive = workflowData.prompts.some(
+        (p) => p.positive && p.positive !== ''
+      );
+      const hasNegative = workflowData.prompts.some((p) => p.negative);
+      // Only show positive/negative distinction when:
+      // 1. We have both types of prompts
+      // 2. We have a small number of prompts (clear pairing)
+      // 3. The positive and negative prompts are clearly distinct content
+      const hasConfidentDistinction =
+        hasPositive &&
+        hasNegative &&
+        workflowData.prompts.length <= 2 &&
+        workflowData.prompts.some(
+          (p) => p.positive && p.negative && p.positive !== p.negative
+        ); // Ensure they're actually different
+
+      const shouldDistinguish = hasConfidentDistinction;
+
+      workflowData.prompts.forEach((prompt, index) => {
+        if (prompt.positive && prompt.positive !== '') {
+          if (shouldDistinguish) {
+            output += `  Positive ${index + 1}: ${prompt.positive}\n`;
+          } else {
+            output += `  ${index + 1}: ${prompt.positive}\n`;
+          }
+        }
+
+        if (prompt.negative) {
+          if (shouldDistinguish) {
+            output += `\n  Negative ${index + 1}: ${prompt.negative}\n`;
+          } else {
+            output += `  ${index + 1}: ${prompt.negative}\n`;
+          }
+        }
+      });
+    }
+
+    // Sampler settings
+    if (workflowData.samplerSettings) {
+      const s = workflowData.samplerSettings;
+      output += `\nSampler Settings:\n`;
+      if (s.steps) output += `  Steps: ${s.steps}\n`;
+      if (s.cfg !== undefined) output += `  CFG Scale: ${s.cfg}\n`;
+      if (s.cfg_start !== undefined && s.cfg_end !== undefined) {
+        output += `  CFG Schedule: ${s.cfg_start} → ${s.cfg_end}\n`;
+      }
+      if (s.scheduler) output += `  Scheduler: ${s.scheduler}\n`;
+      if (s.seed !== undefined) output += `  Seed: ${s.seed}\n`;
+      if (s.denoise !== undefined) output += `  Denoise: ${s.denoise}\n`;
+    }
+
+    // Model info
+    if (workflowData.models.length > 0) {
+      output += `\nModels:\n`;
+      workflowData.models.forEach((model, index) => {
+        output += `  ${index + 1}. ${model}\n`;
+      });
+    }
+
+    // Basic stats
+    const info = extractWorkflowInfo(result.workflow);
+    output += `\nWorkflow Stats:\n`;
+    output += `  Total Nodes: ${info.nodeCount}\n`;
+    output += `  Node Types: ${info.nodeTypes.slice(0, 5).join(', ')}${info.nodeTypes.length > 5 ? '...' : ''}\n`;
+  } else if (result.parameters) {
+    // Handle A1111-style parameters
+    output += `A1111-style Parameters:\n`;
+
+    if (result.parameters.positive_prompt) {
+      output += `\nPrompts:\n`;
+      output += `  Positive: ${result.parameters.positive_prompt}\n`;
+      if (result.parameters.negative_prompt) {
+        output += `\n  Negative: ${result.parameters.negative_prompt}\n`;
+      }
+    }
+
+    output += `\nGeneration Settings:\n`;
+    if (result.parameters.steps)
+      output += `  Steps: ${result.parameters.steps}\n`;
+    if (result.parameters.cfg)
+      output += `  CFG Scale: ${result.parameters.cfg}\n`;
+    if (result.parameters.sampler)
+      output += `  Sampler: ${result.parameters.sampler}\n`;
+    if (result.parameters.seed) output += `  Seed: ${result.parameters.seed}\n`;
+    if (result.parameters.model)
+      output += `  Model: ${result.parameters.model}\n`;
+  } else if (result.metadata) {
+    output += `Metadata found:\n`;
+    output += `  ${result.metadata.substring(0, 200)}${result.metadata.length > 200 ? '...' : ''}\n`;
+  } else {
+    output += `No workflow found\n`;
   }
+
+  output += '\n';
 
   return output;
 }
@@ -206,15 +206,29 @@ function extractComfyUIWorkflowData(workflow: any): ExtractedWorkflowData {
     const inputs = nodeData.inputs || {};
 
     // Extract LoRA information
-    if (classType === 'WanVideoLoraSelect' || classType?.includes('Lora') || classType === 'Power Lora Loader (rgthree)') {
+    if (
+      classType === 'WanVideoLoraSelect' ||
+      classType?.includes('Lora') ||
+      classType === 'Power Lora Loader (rgthree)'
+    ) {
       // Handle Power Lora Loader (rgthree) format
       if (classType === 'Power Lora Loader (rgthree)') {
         for (const [inputKey, inputValue] of Object.entries(inputs)) {
-          if (inputKey.startsWith('lora_') && typeof inputValue === 'object' && inputValue !== null) {
+          if (
+            inputKey.startsWith('lora_') &&
+            typeof inputValue === 'object' &&
+            inputValue !== null
+          ) {
             const loraConfig = inputValue as any;
             // Only include enabled LoRAs
-            if (loraConfig.on === true && loraConfig.lora && loraConfig.strength !== undefined) {
-              const loraName = loraConfig.lora.split('\\').pop()?.split('/').pop() || loraConfig.lora;
+            if (
+              loraConfig.on === true &&
+              loraConfig.lora &&
+              loraConfig.strength !== undefined
+            ) {
+              const loraName =
+                loraConfig.lora.split('\\').pop()?.split('/').pop() ||
+                loraConfig.lora;
               data.loras.push({
                 name: loraName,
                 strength: loraConfig.strength,
@@ -223,7 +237,7 @@ function extractComfyUIWorkflowData(workflow: any): ExtractedWorkflowData {
           }
         }
       }
-      
+
       // Handle individual LoRA nodes with lora and strength fields
       if (inputs.lora && inputs.strength !== undefined) {
         const loraName =
@@ -266,18 +280,18 @@ function extractComfyUIWorkflowData(workflow: any): ExtractedWorkflowData {
     ) {
       if (inputs.text || inputs.positive_prompt) {
         let text = inputs.text || inputs.positive_prompt;
-        
+
         // Skip if text is a connection array (like ["224", 0]) - these need to be resolved
         // in a more complex way that we don't handle in this basic extraction
         if (Array.isArray(text)) {
           continue;
         }
-        
+
         // Only process if we have actual text content
         if (typeof text !== 'string' || !text.trim()) {
           continue;
         }
-        
+
         const isPositive = promptConnections.positive.includes(nodeId);
         const isNegative = promptConnections.negative.includes(nodeId);
 
@@ -361,7 +375,7 @@ function findPromptConnections(workflowNodes: any): {
   };
 
   // Find all sampler nodes
-  for (const [nodeId, node] of Object.entries(workflowNodes)) {
+  for (const [_nodeId, node] of Object.entries(workflowNodes)) {
     if (!node || typeof node !== 'object') continue;
 
     const nodeData = node as any;
@@ -425,4 +439,3 @@ function mergePromptPairs(
 
   return result;
 }
-

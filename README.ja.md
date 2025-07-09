@@ -53,7 +53,6 @@ extract-prompts *.png --quiet
 - `--overwrite`: 保存時に既存ファイルを上書き
 - `--name-pattern <pattern>`: ファイル命名パターン (source|sequential|timestamp) [デフォルト: source]
 - `--organize <mode>`: 保存ファイルの整理 (none|format|date) [デフォルト: none]
-- `--json-file`: 入力ファイルと同じ名前でJSONファイルを作成
 - `--convert-a1111`: A1111パラメータをComfyUIワークフロー形式に変換
 
 ## 対応フォーマット

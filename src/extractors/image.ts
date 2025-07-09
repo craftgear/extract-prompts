@@ -7,12 +7,12 @@ import { UnsupportedFormatError, FileAccessError } from '../errors/index';
 import {
   extractTextAfterUnicodePrefix,
   extractTextFromUtf16Le,
-  decodeUserComment
+  decodeUserComment,
 } from '../utils/encoding';
 import {
   extractPngTextChunks,
   parseTextChunk,
-  extractJsonPatterns
+  extractJsonPatterns,
 } from '../utils/binary';
 import {
   isPngFormat,
@@ -20,51 +20,60 @@ import {
   isWebpFormat,
   containsA1111Parameters,
   isMetadataKeyword,
-  normalizeExifFieldName
+  normalizeExifFieldName,
 } from '../utils/formats';
 
-export async function extractFromImage(filePath: string): Promise<RawExtractionResult | null> {
+export async function extractFromImage(
+  filePath: string
+): Promise<RawExtractionResult | null> {
   // PNG files store ComfyUI data in tEXt chunks
   if (isPngFormat(filePath)) {
     return extractFromPNG(filePath);
   }
-  
+
   // JPEG files may have metadata in EXIF
   if (isJpegFormat(filePath)) {
     return extractFromJPEG(filePath);
   }
-  
+
   // WebP files may have metadata in EXIF
   if (isWebpFormat(filePath)) {
     return extractFromWebP(filePath);
   }
-  
+
   const ext = filePath.split('.').pop() || 'unknown';
-  throw new UnsupportedFormatError(filePath, ext, ['png', 'jpg', 'jpeg', 'webp']);
+  throw new UnsupportedFormatError(filePath, ext, [
+    'png',
+    'jpg',
+    'jpeg',
+    'webp',
+  ]);
 }
 
-async function extractFromPNG(filePath: string): Promise<RawExtractionResult | null> {
+async function extractFromPNG(
+  filePath: string
+): Promise<RawExtractionResult | null> {
   const result: any = {};
-  
+
   try {
     // Read data directly from PNG tEXt chunks
     const fs = await import('fs/promises');
     let buffer: Buffer;
-    
+
     try {
       buffer = await fs.readFile(filePath);
     } catch (error) {
       throw new FileAccessError(filePath, 'read', error as Error);
     }
-    
+
     const textChunks = extractPngTextChunks(buffer);
-    
+
     for (const chunk of textChunks) {
       const parsed = parseTextChunk(chunk.data);
       if (!parsed) continue;
-      
+
       const { keyword, text } = parsed;
-      
+
       // Check for keywords that may contain ComfyUI or A1111 data
       if (isMetadataKeyword(keyword)) {
         if (keyword === 'parameters') {
@@ -91,10 +100,10 @@ async function extractFromPNG(filePath: string): Promise<RawExtractionResult | n
     try {
       const image = sharp(filePath);
       const metadata = await image.metadata();
-      
+
       if (metadata.exif) {
         const jsonMatches = extractJsonPatterns(metadata.exif);
-        
+
         for (const match of jsonMatches) {
           try {
             const parsed = JSON.parse(match);
@@ -111,18 +120,20 @@ async function extractFromPNG(filePath: string): Promise<RawExtractionResult | n
       // Final fallback
     }
   }
-  
+
   return Object.keys(result).length > 0 ? result : null;
 }
 
-async function extractFromJPEG(filePath: string): Promise<RawExtractionResult | null> {
+async function extractFromJPEG(
+  filePath: string
+): Promise<RawExtractionResult | null> {
   const result: any = {};
-  
+
   // For WebP files, use sharp directly (exifr doesn't support WebP)
   if (isWebpFormat(filePath)) {
     return extractFromWebP(filePath);
   }
-  
+
   try {
     // Use exifr to extract comprehensive EXIF data
     const exifData = await exifr.parse(filePath, {
@@ -137,22 +148,22 @@ async function extractFromJPEG(filePath: string): Promise<RawExtractionResult | 
       reviveValues: false,
       translateKeys: false,
       translateValues: false,
-      mergeOutput: false
+      mergeOutput: false,
     });
-    
+
     if (exifData) {
       // Check common EXIF fields where ComfyUI data might be stored
       const fieldsToCheck = [
         'UserComment',
-        'ImageDescription', 
+        'ImageDescription',
         'XPComment',
         'XPKeywords',
         'Software',
         'Artist',
         'Copyright',
-        'Comment'
+        'Comment',
       ];
-      
+
       for (const field of fieldsToCheck) {
         const normalizedField = normalizeExifFieldName(field);
         const value = exifData[normalizedField] || exifData[field];
@@ -184,7 +195,7 @@ async function extractFromJPEG(filePath: string): Promise<RawExtractionResult | 
           }
         }
       }
-      
+
       // Also check for parameters in specific formats used by various tools
       if (!result.workflow) {
         // Check for A1111-style parameters
@@ -192,18 +203,21 @@ async function extractFromJPEG(filePath: string): Promise<RawExtractionResult | 
         if (containsA1111Parameters(imageDesc)) {
           result.parameters = parseA1111Parameters(imageDesc);
         }
-        
+
         // Check UTF-16 encoded UserComment field
         const userComment = exifData.userComment || exifData.UserComment;
         if (userComment) {
           const decodedComment = decodeUserComment(userComment);
-          
+
           if (decodedComment) {
             // Check A1111 style parameters
             if (containsA1111Parameters(decodedComment)) {
               result.parameters = parseA1111Parameters(decodedComment);
               result.raw_parameters = decodedComment;
-            } else if (decodedComment.includes('workflow') || decodedComment.includes('prompt')) {
+            } else if (
+              decodedComment.includes('workflow') ||
+              decodedComment.includes('prompt')
+            ) {
               try {
                 const parsed = JSON.parse(decodedComment);
                 result.workflow = parsed;
@@ -224,7 +238,7 @@ async function extractFromJPEG(filePath: string): Promise<RawExtractionResult | 
       const sharpMetadata = await sharp(filePath).metadata();
       if (sharpMetadata.exif) {
         const jsonMatches = extractJsonPatterns(sharpMetadata.exif);
-        
+
         for (const match of jsonMatches) {
           try {
             const parsed = JSON.parse(match);
@@ -241,26 +255,28 @@ async function extractFromJPEG(filePath: string): Promise<RawExtractionResult | 
       // Final fallback
     }
   }
-  
+
   return Object.keys(result).length > 0 ? result : null;
 }
 
-async function extractFromWebP(filePath: string): Promise<RawExtractionResult | null> {
+async function extractFromWebP(
+  filePath: string
+): Promise<RawExtractionResult | null> {
   const result: any = {};
-  
+
   try {
     // Use Sharp to extract EXIF data from WebP
     const metadata = await sharp(filePath).metadata();
-    
+
     if (metadata.exif) {
       const exifString = metadata.exif.toString();
-      
+
       // Look for User Comment field (text after UNICODE prefix)
       const textData = extractTextAfterUnicodePrefix(exifString);
       if (textData) {
         // Extract text from UTF-16LE format data
         const cleanText = extractTextFromUtf16Le(textData);
-        
+
         if (cleanText && containsA1111Parameters(cleanText)) {
           result.parameters = parseA1111Parameters(cleanText);
           result.raw_parameters = cleanText;
@@ -273,6 +289,7 @@ async function extractFromWebP(filePath: string): Promise<RawExtractionResult | 
     // Error handling
     console.error('WebP extraction error:', error);
   }
-  
+
   return Object.keys(result).length > 0 ? result : null;
 }
+

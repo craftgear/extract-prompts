@@ -14,7 +14,7 @@ export interface SaveOptions {
   /** File name pattern */
   namePattern?: 'source' | 'sequential' | 'timestamp' | 'custom';
   /** Custom name function for custom pattern */
-  customNameFn?: (data: ExtractedData, index: number) => string;
+  customNameFn?: (data: ExtractedData) => string;
   /** Organize by date or format */
   organize?: 'none' | 'format' | 'date';
 }
@@ -23,65 +23,57 @@ export interface SaveOptions {
  * 抽出されたデータをディレクトリに保存
  */
 export async function saveExtractedData(
-  data: ExtractedData[], 
-  directory: string, 
+  file: string,
+  data: ExtractedData,
+  directory: string,
   options: SaveOptions = {}
 ): Promise<void> {
   const {
     format = 'json',
     overwrite = false,
     namePattern = 'source',
-    organize = 'none'
+    organize = 'none',
   } = options;
 
   // ディレクトリが存在しない場合は作成
   await ensureDirectory(directory);
 
-  const processedData = await Promise.all(
-    data.map(async (item, index) => {
-      const fileName = generateFileName(item, index, namePattern, format, options.customNameFn);
-      const targetDirectory = getTargetDirectory(directory, organize, format);
-      
-      // 必要に応じてサブディレクトリを作成
-      if (targetDirectory !== directory) {
-        await ensureDirectory(targetDirectory);
-      }
-      
-      const filePath = path.join(targetDirectory, fileName);
-      
-      // 既存ファイルのチェック
-      if (!overwrite && await fileExists(filePath)) {
-        throw new Error(`File already exists: ${filePath}. Use overwrite option to replace.`);
-      }
-      
-      // データの形式に応じてコンテンツを生成
-      let content: string;
-      
-      if (format === 'json') {
-        content = JSON.stringify([item], null, 2);
-      } else if (format === 'pretty') {
-        content = formatOutput([item], 'pretty');
-      } else {
-        content = JSON.stringify([item], null, 2);
-      }
-      
-      // ファイルに書き込み
-      await fs.writeFile(filePath, content, 'utf8');
-      
-      return {
-        sourceFile: item.file,
-        savedFile: filePath,
-        size: content.length
-      };
-    })
+  const fileName = generateFileName(
+    file,
+    data,
+    namePattern,
+    format,
+    options.customNameFn
   );
+  const targetDirectory = getTargetDirectory(directory, organize, format);
 
-  console.log(`Saved ${processedData.length} files to ${directory}`);
-  if (!options.overwrite) {
-    processedData.forEach(item => {
-      console.log(`  ${path.basename(item.sourceFile)} -> ${path.basename(item.savedFile)}`);
-    });
+  // 必要に応じてサブディレクトリを作成
+  if (targetDirectory !== directory) {
+    await ensureDirectory(targetDirectory);
   }
+
+  const filePath = path.join(targetDirectory, fileName);
+
+  // 既存ファイルのチェック
+  if (!overwrite && (await fileExists(filePath))) {
+    throw new Error(
+      `File already exists: ${filePath}. Use overwrite option to replace.`
+    );
+  }
+
+  // データの形式に応じてコンテンツを生成
+  let content: string;
+
+  if (format === 'json') {
+    content = JSON.stringify(data, null, 2);
+  } else if (format === 'pretty') {
+    content = formatOutput(file, data, 'pretty');
+  } else {
+    content = JSON.stringify(data, null, 2);
+  }
+
+  // ファイルに書き込み
+  await fs.writeFile(filePath, content, 'utf8');
 }
 
 /**
@@ -111,42 +103,43 @@ async function fileExists(filePath: string): Promise<boolean> {
  * ファイル名を生成
  */
 function generateFileName(
-  data: ExtractedData, 
-  index: number, 
-  pattern: string, 
+  file: string,
+  data: ExtractedData,
+  pattern: string,
   format: string,
-  customNameFn?: (data: ExtractedData, index: number) => string
+  customNameFn?: (data: ExtractedData) => string
 ): string {
   const extension = getFileExtension(format);
-  
+
   if (pattern === 'custom' && customNameFn) {
-    const customName = customNameFn(data, index);
+    const customName = customNameFn(data);
     return ensureExtension(customName, extension);
   }
-  
+
   let baseName: string;
-  
+
   switch (pattern) {
     case 'source':
-      baseName = path.basename(data.file, path.extname(data.file));
-      break;
-    case 'sequential':
-      baseName = `workflow_${(index + 1).toString().padStart(3, '0')}`;
+      baseName = path.basename(file, path.extname(file));
       break;
     case 'timestamp':
-      baseName = `workflow_${Date.now()}_${index}`;
+      baseName = `workflow_${Date.now()}`;
       break;
     default:
-      baseName = path.basename(data.file, path.extname(data.file));
+      baseName = path.basename(file, path.extname(file));
   }
-  
+
   return `${baseName}${extension}`;
 }
 
 /**
  * 保存先ディレクトリを決定
  */
-function getTargetDirectory(baseDir: string, organize: string, format: string): string {
+function getTargetDirectory(
+  baseDir: string,
+  organize: string,
+  format: string
+): string {
   switch (organize) {
     case 'format':
       return path.join(baseDir, format);
@@ -187,11 +180,11 @@ function ensureExtension(fileName: string, extension: string): string {
  */
 export function handleDuplicateNames(files: string[]): string[] {
   const nameCount = new Map<string, number>();
-  
-  return files.map(file => {
+
+  return files.map((file) => {
     const base = path.basename(file, path.extname(file));
     const ext = path.extname(file);
-    
+
     if (nameCount.has(base)) {
       const count = nameCount.get(base)! + 1;
       nameCount.set(base, count);
@@ -220,9 +213,10 @@ export interface SaveStats {
 export function calculateSaveStats(results: any[]): SaveStats {
   return {
     totalFiles: results.length,
-    savedFiles: results.filter(r => r.success).length,
-    skippedFiles: results.filter(r => r.skipped).length,
-    errors: results.filter(r => r.error).length,
-    totalSize: results.reduce((sum, r) => sum + (r.size || 0), 0)
+    savedFiles: results.filter((r) => r.success).length,
+    skippedFiles: results.filter((r) => r.skipped).length,
+    errors: results.filter((r) => r.error).length,
+    totalSize: results.reduce((sum, r) => sum + (r.size || 0), 0),
   };
 }
+

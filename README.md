@@ -53,7 +53,6 @@ extract-prompts *.png --quiet
 - `--overwrite`: Overwrite existing files when saving
 - `--name-pattern <pattern>`: File naming pattern (source|sequential|timestamp) [default: source]
 - `--organize <mode>`: Organize saved files (none|format|date) [default: none]
-- `--json-file`: Create JSON file with same name as input file
 - `--convert-a1111`: Convert A1111 parameters to ComfyUI workflow format
 
 ## Supported Formats

@@ -1,17 +1,17 @@
 /**
  * TypeScript type definitions for the prompt extraction project
  * Supports ComfyUI, A1111, and other metadata extraction workflows
- * 
+ *
  * @fileoverview Complete type definitions for extracted workflow data
  */
 
 /**
  * Basic structure for extracted data results from file processing
- * 
+ *
  * Contains all possible types of data that can be extracted from images and videos,
  * including ComfyUI workflows, A1111 parameters, and general metadata.
  */
-export interface ExtractedData {
+export type ExtractedData = {
   /** ComfyUI workflow data */
   workflow?: ComfyUIWorkflow;
   /** A1111-style generation parameters */
@@ -22,17 +22,15 @@ export interface ExtractedData {
   metadata?: string;
   /** User comment text */
   user_comment?: string;
-  /** Source file path */
-  file: string;
-}
+};
 
 /**
  * Raw extraction result from individual format processors
- * 
+ *
  * Contains extracted data without file path information,
  * as the file path is added later by the main processing loop.
  */
-export interface RawExtractionResult {
+export type RawExtractionResult = {
   /** ComfyUI workflow data */
   workflow?: ComfyUIWorkflow;
   /** A1111-style generation parameters */
@@ -43,11 +41,11 @@ export interface RawExtractionResult {
   metadata?: string;
   /** User comment text */
   user_comment?: string;
-}
+};
 
 /**
  * ComfyUI workflow structure (UI format)
- * 
+ *
  * Represents the complete workflow data structure used by ComfyUI UI,
  * including version, nodes, links, and configuration.
  */
@@ -76,7 +74,7 @@ export interface ComfyUIUIWorkflow {
 
 /**
  * ComfyUI workflow structure (API format - legacy)
- * 
+ *
  * Represents the API format workflow structure used by ComfyUI,
  * including prompt information and node definitions.
  */
@@ -91,7 +89,7 @@ export interface ComfyUIAPIWorkflow {
 
 /**
  * ComfyUI workflow structure (supports both UI and API formats)
- * 
+ *
  * Union type that supports both the new UI format and legacy API format
  * for backwards compatibility.
  */
@@ -99,7 +97,7 @@ export type ComfyUIWorkflow = ComfyUIUIWorkflow | ComfyUIAPIWorkflow;
 
 /**
  * ComfyUI workflow node structure (UI format)
- * 
+ *
  * Represents a single node in a ComfyUI UI workflow with positioning,
  * sizing, and connection information.
  */
@@ -130,15 +128,22 @@ export interface ComfyUIWorkflowNode {
 
 /**
  * ComfyUI workflow link structure (UI format)
- * 
+ *
  * Represents a connection between two nodes in a ComfyUI UI workflow.
  * Format: [link_id, output_node_id, output_slot, input_node_id, input_slot, type]
  */
-export type ComfyUIWorkflowLink = [number, number, number, number, number, string];
+export type ComfyUIWorkflowLink = [
+  number,
+  number,
+  number,
+  number,
+  number,
+  string,
+];
 
 /**
  * Detailed ComfyUI prompt structure (API format - for backwards compatibility)
- * 
+ *
  * Maps node IDs to their corresponding ComfyUI node definitions.
  */
 export interface ComfyUIPrompt {
@@ -148,7 +153,7 @@ export interface ComfyUIPrompt {
 
 /**
  * ComfyUI node structure
- * 
+ *
  * Represents a single node in a ComfyUI workflow with its type,
  * inputs, outputs, and metadata.
  */
@@ -168,7 +173,7 @@ export interface ComfyUINode {
 
 /**
  * Automatic1111 (A1111) style parameters structure
- * 
+ *
  * Represents generation parameters commonly used by Stable Diffusion WebUI
  * and other A1111-compatible tools.
  */
@@ -370,10 +375,7 @@ export class ExtractionError extends Error {
  * サポートされていないフォーマットのエラー
  */
 export class UnsupportedFormatError extends ExtractionError {
-  constructor(
-    format: string,
-    filePath?: string
-  ) {
+  constructor(format: string, filePath?: string) {
     super(`Unsupported file format: ${format}`, filePath);
     this.name = 'UnsupportedFormatError';
   }
@@ -536,10 +538,10 @@ export function isComfyUIWorkflow(data: any): data is ComfyUIWorkflow {
   if (!data || typeof data !== 'object') {
     return false;
   }
-  
+
   const keys = Object.keys(data);
-  const hasNumericKeys = keys.some(key => /^\d+$/.test(key));
-  
+  const hasNumericKeys = keys.some((key) => /^\d+$/.test(key));
+
   if (hasNumericKeys) {
     for (const key of keys) {
       if (/^\d+$/.test(key)) {
@@ -550,7 +552,7 @@ export function isComfyUIWorkflow(data: any): data is ComfyUIWorkflow {
       }
     }
   }
-  
+
   return !!(data.workflow || data.prompt || data.extra_pnginfo);
 }
 
@@ -561,9 +563,16 @@ export function isA1111Parameters(data: any): data is A1111Parameters {
   if (!data || typeof data !== 'object') {
     return false;
   }
-  
-  const commonFields = ['positive_prompt', 'negative_prompt', 'steps', 'cfg', 'sampler', 'seed'];
-  return commonFields.some(field => field in data);
+
+  const commonFields = [
+    'positive_prompt',
+    'negative_prompt',
+    'steps',
+    'cfg',
+    'sampler',
+    'seed',
+  ];
+  return commonFields.some((field) => field in data);
 }
 
 /**
@@ -573,6 +582,11 @@ export function isValidExtractedData(data: any): data is ExtractedData {
   if (!data || typeof data !== 'object') {
     return false;
   }
-  
-  return !!(data.workflow || data.parameters || data.metadata || data.user_comment);
+
+  return !!(
+    data.workflow ||
+    data.parameters ||
+    data.metadata ||
+    data.user_comment
+  );
 }
