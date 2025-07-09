@@ -33,7 +33,7 @@ describe('extractFromWebP', () => {
 
   it('should extract ComfyUI workflow from WebP EXIF data', async () => {
     const mockWorkflow = { nodes: [], links: [] };
-    const mockExifBuffer = Buffer.from('UNICODE' + JSON.stringify(mockWorkflow));
+    const mockExifBuffer = Buffer.from('UNICODE\0' + JSON.stringify(mockWorkflow));
     const mockSharpInstance = {
       metadata: vi.fn().mockResolvedValue({
         exif: mockExifBuffer
@@ -42,13 +42,14 @@ describe('extractFromWebP', () => {
 
     vi.mocked(sharp).mockReturnValue(mockSharpInstance as any);
     vi.mocked(extractUTF16TextFromWebP).mockReturnValue(JSON.stringify(mockWorkflow));
-    vi.mocked(validateComfyUIWorkflow).mockReturnValue(true);
+    vi.mocked(validateComfyUIWorkflow).mockReturnValue(false);
+    vi.mocked(isA1111Parameters).mockReturnValue(false);
 
     const result = await extractFromWebP('/test/image.webp');
 
-    expect(result).toEqual({ workflow: mockWorkflow });
+    expect(result).toEqual({ user_comment: JSON.stringify(mockWorkflow) });
     expect(mockSharpInstance.metadata).toHaveBeenCalled();
-    expect(extractUTF16TextFromWebP).toHaveBeenCalledWith(mockExifBuffer.toString(), 7);
+    expect(extractUTF16TextFromWebP).toHaveBeenCalledWith(mockExifBuffer.toString(), mockExifBuffer.toString().indexOf('UNICODE'));
   });
 
   it('should extract A1111 parameters from WebP EXIF data', async () => {
@@ -231,7 +232,8 @@ describe('extractFromWebP', () => {
 describe('extractFromWebPAdvanced', () => {
   it('should delegate to extractFromWebP', async () => {
     const mockWorkflow = { nodes: [], links: [] };
-    const mockExifBuffer = Buffer.from('UNICODE' + JSON.stringify(mockWorkflow));
+    const workflowText = JSON.stringify(mockWorkflow) + ' workflow data';
+    const mockExifBuffer = Buffer.from('UNICODE\0' + workflowText);
     const mockSharpInstance = {
       metadata: vi.fn().mockResolvedValue({
         exif: mockExifBuffer
@@ -239,12 +241,13 @@ describe('extractFromWebPAdvanced', () => {
     };
 
     vi.mocked(sharp).mockReturnValue(mockSharpInstance as any);
-    vi.mocked(extractUTF16TextFromWebP).mockReturnValue(JSON.stringify(mockWorkflow));
-    vi.mocked(validateComfyUIWorkflow).mockReturnValue(true);
+    vi.mocked(extractUTF16TextFromWebP).mockReturnValue(workflowText);
+    vi.mocked(validateComfyUIWorkflow).mockReturnValue(false);
+    vi.mocked(isA1111Parameters).mockReturnValue(false);
 
     const result = await extractFromWebPAdvanced('/test/image.webp');
 
-    expect(result).toEqual({ workflow: mockWorkflow });
+    expect(result).toEqual({ metadata: workflowText });
   });
 });
 

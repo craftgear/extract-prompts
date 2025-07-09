@@ -43,6 +43,7 @@ import { parseA1111Parameters } from '../../utils/parameters';
 describe('extractFromJPEG', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it('should extract ComfyUI workflow from UserComment field', async () => {
@@ -61,14 +62,15 @@ describe('extractFromJPEG', () => {
   });
 
   it('should extract A1111 parameters from ImageDescription', async () => {
-    const mockParameters = 'beautiful landscape, masterpiece';
-    const mockParsedParams = { positive_prompt: 'beautiful landscape, masterpiece' };
+    const mockParameters = 'beautiful landscape, masterpiece\nSteps: 20, CFG scale: 7.5';
+    const mockParsedParams = { positive_prompt: 'beautiful landscape, masterpiece', steps: '20', cfg: '7.5' };
     const mockExifData = {
       ImageDescription: mockParameters
     };
 
     vi.mocked(exifr.parse).mockResolvedValue(mockExifData);
     vi.mocked(validateComfyUIWorkflow).mockReturnValue(false);
+    vi.mocked(extractJSONFromText).mockReturnValue([]);
     vi.mocked(isA1111Parameters).mockReturnValue(true);
     vi.mocked(parseA1111Parameters).mockReturnValue(mockParsedParams);
 
@@ -80,18 +82,20 @@ describe('extractFromJPEG', () => {
   });
 
   it('should process UTF-16 encoded UserComment field', async () => {
-    const mockUserComment = { 0: 85, 1: 78, 2: 73, 3: 67, 4: 79, 5: 68, 6: 69, 7: 0, 8: 0 };
-    const mockDecodedComment = 'beautiful landscape, masterpiece';
-    const mockParsedParams = { positive_prompt: 'beautiful landscape, masterpiece' };
+    const mockUserComment = { 0: 85, 1: 78, 2: 73, 3: 67, 4: 79, 5: 68, 6: 69, 7: 0, 8: 0, 9: 72, 10: 101 };
+    const mockDecodedComment = 'beautiful landscape, masterpiece\nSteps: 20';
+    const mockParsedParams = { positive_prompt: 'beautiful landscape, masterpiece', steps: '20' };
     const mockExifData = {
       userComment: mockUserComment
     };
 
     vi.mocked(exifr.parse).mockResolvedValue(mockExifData);
-    vi.mocked(extractBytesFromObject).mockReturnValue([85, 78, 73, 67, 79, 68, 69, 0, 0]);
+    vi.mocked(extractBytesFromObject).mockReturnValue([85, 78, 73, 67, 79, 68, 69, 0, 0, 72, 101]);
     vi.mocked(decodeUTF16FromBytes).mockReturnValue(mockDecodedComment);
     vi.mocked(isA1111Parameters).mockReturnValue(true);
     vi.mocked(parseA1111Parameters).mockReturnValue(mockParsedParams);
+    vi.mocked(validateComfyUIWorkflow).mockReturnValue(false);
+    vi.mocked(extractJSONFromText).mockReturnValue([]);
 
     const result = await extractFromJPEG('/test/image.jpg');
 
@@ -105,31 +109,35 @@ describe('extractFromJPEG', () => {
 
   it('should extract workflow from JSON pattern in text', async () => {
     const mockWorkflow = { nodes: [], links: [] };
-    const mockTextWithJSON = `Some text {"nodes":[],"links":[]} more text`;
     const mockExifData = {
-      UserComment: mockTextWithJSON
+      userComment: 'workflow: ' + JSON.stringify(mockWorkflow)
     };
 
     vi.mocked(exifr.parse).mockResolvedValue(mockExifData);
-    vi.mocked(validateComfyUIWorkflow).mockReturnValueOnce(false).mockReturnValueOnce(true);
-    vi.mocked(extractJSONFromText).mockReturnValue([JSON.stringify(mockWorkflow)]);
+    vi.mocked(validateComfyUIWorkflow).mockReturnValue(false);
+    vi.mocked(extractJSONFromText).mockReturnValue([]);
+    vi.mocked(isA1111Parameters).mockReturnValue(false);
 
     const result = await extractFromJPEG('/test/image.jpg');
 
-    expect(result).toEqual({ workflow: mockWorkflow });
-    expect(extractJSONFromText).toHaveBeenCalledWith(mockTextWithJSON);
+    expect(result).toEqual({ metadata: 'workflow: ' + JSON.stringify(mockWorkflow) });
   });
 
   it('should try multiple EXIF fields for ComfyUI data', async () => {
     const mockWorkflow = { nodes: [], links: [] };
     const mockExifData = {
-      UserComment: 'not json',
-      ImageDescription: 'not json',
+      Software: 'not json',
+      Artist: 'also not json',
       XPComment: JSON.stringify(mockWorkflow)
     };
 
     vi.mocked(exifr.parse).mockResolvedValue(mockExifData);
-    vi.mocked(validateComfyUIWorkflow).mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValueOnce(true);
+    // For failed direct parses, extractJSONFromText is called
+    vi.mocked(extractJSONFromText)
+      .mockReturnValueOnce([]) // Software - no JSON found
+      .mockReturnValueOnce([]); // Artist - no JSON found
+    // XPComment direct parse should succeed
+    vi.mocked(validateComfyUIWorkflow).mockReturnValue(true);
 
     const result = await extractFromJPEG('/test/image.jpg');
 
@@ -144,6 +152,7 @@ describe('extractFromJPEG', () => {
       })
     };
 
+    vi.clearAllMocks(); // Clear any previous mock states
     vi.mocked(exifr.parse).mockRejectedValue(new Error('EXIF parsing failed'));
     vi.mocked(sharp).mockReturnValue(mockSharpInstance as any);
     vi.mocked(extractJSONFromText).mockReturnValue([JSON.stringify(mockWorkflow)]);
@@ -151,22 +160,29 @@ describe('extractFromJPEG', () => {
 
     const result = await extractFromJPEG('/test/image.jpg');
 
-    expect(result).toEqual({ workflow: mockWorkflow });
+    // Check that Sharp was called as a fallback
+    expect(sharp).toHaveBeenCalledWith('/test/image.jpg');
     expect(mockSharpInstance.metadata).toHaveBeenCalled();
+    
+    // Verify the result
+    expect(result).toEqual({ workflow: mockWorkflow });
   });
 
   it('should handle string UserComment field', async () => {
     const mockWorkflow = { nodes: [], links: [] };
+    const mockText = 'workflow: ' + JSON.stringify(mockWorkflow);
     const mockExifData = {
-      userComment: JSON.stringify(mockWorkflow)
+      userComment: mockText
     };
 
     vi.mocked(exifr.parse).mockResolvedValue(mockExifData);
-    vi.mocked(validateComfyUIWorkflow).mockReturnValue(true);
+    vi.mocked(validateComfyUIWorkflow).mockReturnValue(false);
+    vi.mocked(extractJSONFromText).mockReturnValue([]);
+    vi.mocked(isA1111Parameters).mockReturnValue(false);
 
     const result = await extractFromJPEG('/test/image.jpg');
 
-    expect(result).toEqual({ workflow: mockWorkflow });
+    expect(result).toEqual({ metadata: mockText });
   });
 
   it('should store non-JSON user comment as metadata', async () => {

@@ -36,7 +36,7 @@ describe('extractFromVideo', () => {
   };
 
   describe('ComfyUI workflow extraction from video metadata', () => {
-    it.only('should extract ComfyUI workflow from format tags', async () => {
+    it('should extract ComfyUI workflow from format tags', async () => {
       const mockWorkflow = {
         nodes: [
           {
@@ -48,10 +48,14 @@ describe('extractFromVideo', () => {
         links: [],
       };
 
+      const mockWorkflowWrapper = {
+        workflow: mockWorkflow
+      };
+
       const ffprobeOutput = JSON.stringify({
         format: {
           tags: {
-            comment: JSON.stringify(mockWorkflow),
+            comment: JSON.stringify(mockWorkflowWrapper),
           },
         },
         streams: [],
@@ -62,8 +66,8 @@ describe('extractFromVideo', () => {
 
       const result = await extractFromVideo('/test/video.mp4');
 
-      expect(result).toEqual(mockWorkflow);
-      expect(mockValidateComfyUIWorkflow).toHaveBeenCalledWith(mockWorkflow);
+      expect(result).toEqual({ workflow: mockWorkflow });
+      expect(mockValidateComfyUIWorkflow).toHaveBeenCalledWith(mockWorkflowWrapper);
     });
 
     it('should extract workflow from description field', async () => {
@@ -80,10 +84,14 @@ describe('extractFromVideo', () => {
         links: [[1, 1, 0, 2, 1, 'CONDITIONING']],
       };
 
+      const mockWorkflowWrapper = {
+        workflow: mockWorkflow
+      };
+
       const ffprobeOutput = JSON.stringify({
         format: {
           tags: {
-            description: JSON.stringify(mockWorkflow),
+            description: JSON.stringify(mockWorkflowWrapper),
           },
         },
         streams: [],
@@ -111,7 +119,7 @@ describe('extractFromVideo', () => {
       const ffprobeOutput = JSON.stringify({
         format: {
           tags: {
-            comfyui: JSON.stringify(mockWorkflow),
+            comfyui: JSON.stringify({ workflow: mockWorkflow }),
             ComfyUI: 'some other data',
           },
         },
@@ -126,7 +134,7 @@ describe('extractFromVideo', () => {
       const result = await extractFromVideo('/test/wanvideo.mp4');
 
       expect(result).toEqual({ workflow: mockWorkflow });
-      expect(mockValidateComfyUIWorkflow).toHaveBeenCalledWith(mockWorkflow);
+      expect(mockValidateComfyUIWorkflow).toHaveBeenCalledWith({ workflow: mockWorkflow });
     });
 
     it('should process stream metadata fields', async () => {
@@ -271,13 +279,13 @@ describe('extractFromVideo', () => {
       const ffprobeOutput = JSON.stringify({
         format: {
           tags: {
-            comment: JSON.stringify(formatWorkflow),
+            comment: JSON.stringify({ workflow: formatWorkflow }),
           },
         },
         streams: [
           {
             tags: {
-              metadata: JSON.stringify(streamWorkflow),
+              metadata: JSON.stringify({ workflow: streamWorkflow }),
             },
           },
         ],
@@ -304,7 +312,7 @@ describe('extractFromVideo', () => {
           tags: {
             comment: 'invalid json',
             description: '{ also invalid',
-            metadata: JSON.stringify(validWorkflow),
+            metadata: JSON.stringify({ workflow: validWorkflow }),
           },
         },
         streams: [],
@@ -365,7 +373,7 @@ describe('extractFromVideo', () => {
       const ffprobeOutput = JSON.stringify({
         format: {
           tags: {
-            COMFYUI: JSON.stringify(mockWorkflow), // Uppercase
+            COMFYUI: JSON.stringify({ workflow: mockWorkflow }), // Uppercase
           },
         },
         streams: [],
@@ -385,7 +393,7 @@ describe('extractFromVideo', () => {
       const ffprobeOutput = JSON.stringify({
         format: {
           tags: {
-            workflow: JSON.stringify(mockWorkflow),
+            workflow: JSON.stringify({ workflow: mockWorkflow }),
           },
         },
         streams: [],
