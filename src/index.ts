@@ -15,12 +15,13 @@ import { join, dirname, basename, extname } from 'path';
 import { stat, mkdir } from 'fs/promises';
 import { UnsupportedFormatError } from './types';
 
+import pkg from '../package.json';
 const program = new Command();
 
 program
   .name('extract-prompts')
   .description('Extract ComfyUI workflow JSON from images and videos')
-  .version('2.0.1');
+  .version(pkg.version || 'no version found');
 
 program
   .argument('<files...>', 'Files to process (supports glob patterns)')
