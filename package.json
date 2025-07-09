@@ -1,6 +1,6 @@
 {
   "name": "@craftgear/extract-prompts",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "Extract ComfyUI workflow JSON and A1111 prompts from images and videos",
   "license": "MIT",
   "author": "",
