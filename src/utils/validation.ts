@@ -65,12 +65,27 @@ export function validateComfyUIWorkflow(data: any, strict: boolean = false): boo
       return validNodeCount > 0;
     }
     
+    // Check for UI format workflow (has nodes array)
+    if (data.nodes && Array.isArray(data.nodes)) {
+      // Validate that nodes have the typical UI format structure
+      const validUINodes = data.nodes.filter((node: any) => 
+        node && typeof node === 'object' && 
+        typeof node.id !== 'undefined' &&
+        node.type && typeof node.type === 'string'
+      );
+      
+      // Require at least one valid node for UI format
+      if (validUINodes.length > 0) {
+        return true;
+      }
+    }
+    
     // Check for other ComfyUI-specific patterns
     if (data.workflow || data.prompt || data.extra_pnginfo) {
       return true;
     }
     
-    // Check for node-based structure with class_type
+    // Check for node-based structure with class_type (legacy arrays)
     if (Array.isArray(data)) {
       return data.some(item => 
         item && typeof item === 'object' && 
@@ -115,22 +130,43 @@ export function extractWorkflowInfo(workflow: any): WorkflowInfo {
     };
   }
   
-  // Count nodes and extract types
-  for (const [key, node] of Object.entries(workflow)) {
-    if (/^\d+$/.test(key) && node && typeof node === 'object') {
-      const nodeData = node as any;
-      info.nodeCount++;
-      
-      if (nodeData.class_type) {
-        info.nodeTypes.add(nodeData.class_type);
+  // Handle both UI format (has nodes array) and API format (numeric keys)
+  if (workflow.nodes && Array.isArray(workflow.nodes)) {
+    // UI format workflow
+    info.nodeCount = workflow.nodes.length;
+    
+    for (const node of workflow.nodes) {
+      if (node && typeof node === 'object' && node.type) {
+        info.nodeTypes.add(node.type);
         
-        // Check for common node types
-        if (nodeData.class_type.toLowerCase().includes('prompt')) {
+        // Check for common node types  
+        if (node.type.toLowerCase().includes('prompt') || node.type.toLowerCase().includes('text')) {
           info.hasPrompt = true;
         }
-        if (nodeData.class_type.toLowerCase().includes('model') || 
-            nodeData.class_type.toLowerCase().includes('checkpoint')) {
+        if (node.type.toLowerCase().includes('model') || 
+            node.type.toLowerCase().includes('checkpoint')) {
           info.hasModel = true;
+        }
+      }
+    }
+  } else {
+    // API format workflow - count nodes with numeric keys
+    for (const [key, node] of Object.entries(workflow)) {
+      if (/^\d+$/.test(key) && node && typeof node === 'object') {
+        const nodeData = node as any;
+        info.nodeCount++;
+        
+        if (nodeData.class_type) {
+          info.nodeTypes.add(nodeData.class_type);
+          
+          // Check for common node types
+          if (nodeData.class_type.toLowerCase().includes('prompt')) {
+            info.hasPrompt = true;
+          }
+          if (nodeData.class_type.toLowerCase().includes('model') || 
+              nodeData.class_type.toLowerCase().includes('checkpoint')) {
+            info.hasModel = true;
+          }
         }
       }
     }

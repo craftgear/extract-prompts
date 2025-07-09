@@ -120,6 +120,7 @@ function formatPretty(file: string, result: ExtractedData): string {
       if (s.cfg_start !== undefined && s.cfg_end !== undefined) {
         output += `  CFG Schedule: ${s.cfg_start} → ${s.cfg_end}\n`;
       }
+      if (s.sampler) output += `  Sampler: ${s.sampler}\n`;
       if (s.scheduler) output += `  Scheduler: ${s.scheduler}\n`;
       if (s.seed !== undefined) output += `  Seed: ${s.seed}\n`;
       if (s.denoise !== undefined) output += `  Denoise: ${s.denoise}\n`;
@@ -180,14 +181,36 @@ function extractComfyUIWorkflowData(workflow: any): ExtractedWorkflowData {
     models: [],
   };
 
-  // Handle both direct workflow and nested prompt structure
+
+  // Handle different workflow formats
   let workflowNodes = workflow;
-  if (workflow.prompt && typeof workflow.prompt === 'string') {
+  
+  // Handle UI format workflow (has nodes array)
+  if (workflow.nodes && Array.isArray(workflow.nodes)) {
+    // Convert UI format nodes to API format for processing
+    workflowNodes = {};
+    workflow.nodes.forEach((node: any) => {
+      if (node && node.id !== undefined) {
+        // Map UI format node to API format
+        workflowNodes[node.id.toString()] = {
+          class_type: node.type,
+          inputs: extractInputsFromUINode(node),
+          _meta: node.properties ? { title: node.properties['Node name for S&R'] } : {}
+        };
+      }
+    });
+  }
+  // Handle API format with nested prompt structure
+  else if (workflow.prompt && typeof workflow.prompt === 'string') {
     try {
       workflowNodes = JSON.parse(workflow.prompt);
     } catch (e) {
       // Fallback to original workflow
     }
+  }
+  // Handle API format with object prompt
+  else if (workflow.prompt && typeof workflow.prompt === 'object') {
+    workflowNodes = workflow.prompt;
   }
 
   if (!workflowNodes || typeof workflowNodes !== 'object') {
@@ -195,7 +218,7 @@ function extractComfyUIWorkflowData(workflow: any): ExtractedWorkflowData {
   }
 
   // First, find sampler nodes to identify positive/negative connections
-  const promptConnections = findPromptConnections(workflowNodes);
+  const promptConnections = findPromptConnections(workflowNodes, workflow);
 
   // Extract data from nodes
   for (const [nodeId, node] of Object.entries(workflowNodes)) {
@@ -238,7 +261,18 @@ function extractComfyUIWorkflowData(workflow: any): ExtractedWorkflowData {
         }
       }
 
-      // Handle individual LoRA nodes with lora and strength fields
+      // Handle individual LoRA nodes with lora_name and strength fields
+      if (inputs.lora_name && (inputs.strength_model !== undefined || inputs.strength !== undefined)) {
+        const loraName =
+          inputs.lora_name.split('\\').pop()?.split('/').pop() || inputs.lora_name;
+        const strength = inputs.strength_model !== undefined ? inputs.strength_model : inputs.strength;
+        data.loras.push({
+          name: loraName,
+          strength: strength,
+        });
+      }
+      
+      // Handle legacy lora field for backwards compatibility
       if (inputs.lora && inputs.strength !== undefined) {
         const loraName =
           inputs.lora.split('\\').pop()?.split('/').pop() || inputs.lora;
@@ -295,6 +329,7 @@ function extractComfyUIWorkflowData(workflow: any): ExtractedWorkflowData {
         const isPositive = promptConnections.positive.includes(nodeId);
         const isNegative = promptConnections.negative.includes(nodeId);
 
+
         if (isPositive) {
           data.prompts.push({
             positive: text,
@@ -325,6 +360,7 @@ function extractComfyUIWorkflowData(workflow: any): ExtractedWorkflowData {
       data.samplerSettings = {
         steps: inputs.steps,
         cfg: typeof inputs.cfg === 'number' ? inputs.cfg : inputs.shift, // Handle both cfg and shift parameters
+        sampler: inputs.sampler_name || inputs.sampler,
         scheduler: inputs.scheduler,
         seed: inputs.seed,
         denoise: inputs.denoise_strength || inputs.denoise,
@@ -363,9 +399,9 @@ function extractComfyUIWorkflowData(workflow: any): ExtractedWorkflowData {
 }
 
 /**
- * Find positive and negative prompt connections by analyzing sampler nodes
+ * Find positive and negative prompt connections by analyzing sampler nodes and links
  */
-function findPromptConnections(workflowNodes: any): {
+function findPromptConnections(workflowNodes: any, workflow?: any): {
   positive: string[];
   negative: string[];
 } {
@@ -374,29 +410,68 @@ function findPromptConnections(workflowNodes: any): {
     negative: [],
   };
 
-  // Find all sampler nodes
-  for (const [_nodeId, node] of Object.entries(workflowNodes)) {
-    if (!node || typeof node !== 'object') continue;
-
-    const nodeData = node as any;
-    const classType = nodeData.class_type;
-    const inputs = nodeData.inputs || {};
-
-    if (
-      classType === 'KSampler' ||
-      classType === 'WanVideoSampler' ||
-      classType?.includes('Sampler')
-    ) {
-      // Check for positive connection
-      if (inputs.positive && Array.isArray(inputs.positive)) {
-        const [connectedNodeId] = inputs.positive;
-        connections.positive.push(connectedNodeId);
+  // For UI format workflows, we need to trace links
+  if (workflow && workflow.links && Array.isArray(workflow.links)) {
+    // Find KSampler nodes and trace their connections through links
+    for (const [nodeId, node] of Object.entries(workflowNodes)) {
+      const nodeData = node as any;
+      const classType = nodeData.class_type;
+      
+      if (
+        classType === 'KSampler' ||
+        classType === 'WanVideoSampler' ||
+        classType?.includes('Sampler')
+      ) {
+        const inputs = nodeData.inputs || {};
+        
+        // Trace positive connection through links
+        if (inputs.positive && typeof inputs.positive === 'object' && inputs.positive.link) {
+          const linkId = inputs.positive.link;
+          const link = workflow.links.find((l: any) => l[0] === linkId);
+          if (link) {
+            const [, outputNodeId] = link;
+            connections.positive.push(outputNodeId.toString());
+          }
+        }
+        
+        // Trace negative connection through links
+        if (inputs.negative && typeof inputs.negative === 'object' && inputs.negative.link) {
+          const linkId = inputs.negative.link;
+          const link = workflow.links.find((l: any) => l[0] === linkId);
+          if (link) {
+            const [, outputNodeId] = link;
+            connections.negative.push(outputNodeId.toString());
+          }
+        }
       }
+    }
+  } else {
+    // Original API format handling
+    for (const [_nodeId, node] of Object.entries(workflowNodes)) {
+      if (!node || typeof node !== 'object') continue;
 
-      // Check for negative connection
-      if (inputs.negative && Array.isArray(inputs.negative)) {
-        const [connectedNodeId] = inputs.negative;
-        connections.negative.push(connectedNodeId);
+      const nodeData = node as any;
+      const classType = nodeData.class_type;
+      const inputs = nodeData.inputs || {};
+
+      if (
+        classType === 'KSampler' ||
+        classType === 'WanVideoSampler' ||
+        classType?.includes('Sampler')
+      ) {
+        // Check for positive connection
+        if (inputs.positive && Array.isArray(inputs.positive)) {
+          // API format: [nodeId, slotIndex]
+          const [connectedNodeId] = inputs.positive;
+          connections.positive.push(connectedNodeId.toString());
+        }
+
+        // Check for negative connection  
+        if (inputs.negative && Array.isArray(inputs.negative)) {
+          // API format: [nodeId, slotIndex]
+          const [connectedNodeId] = inputs.negative;
+          connections.negative.push(connectedNodeId.toString());
+        }
       }
     }
   }
@@ -438,4 +513,85 @@ function mergePromptPairs(
   }
 
   return result;
+}
+
+/**
+ * Extract inputs from UI format node and convert to API format
+ */
+function extractInputsFromUINode(node: any): Record<string, any> {
+  const inputs: Record<string, any> = {};
+  const classType = node.type;
+  const widgetValues = node.widgets_values || [];
+
+  // Map common node types and their widget values to input names
+  switch (classType) {
+    case 'CheckpointLoaderSimple':
+      if (widgetValues[0]) inputs.ckpt_name = widgetValues[0];
+      break;
+    case 'LoraLoader':
+      if (widgetValues[0]) inputs.lora_name = widgetValues[0];
+      if (widgetValues[1] !== undefined) inputs.strength_model = widgetValues[1];
+      if (widgetValues[2] !== undefined) inputs.strength_clip = widgetValues[2];
+      break;
+    case 'CLIPTextEncode':
+      if (widgetValues[0]) inputs.text = widgetValues[0];
+      break;
+    case 'KSampler':
+    case 'WanVideoSampler':
+      if (widgetValues[0] !== undefined) inputs.seed = widgetValues[0];
+      if (widgetValues[2] !== undefined) inputs.steps = widgetValues[2];
+      if (widgetValues[3] !== undefined) inputs.cfg = widgetValues[3];
+      if (widgetValues[4]) inputs.sampler_name = widgetValues[4];
+      if (widgetValues[5]) inputs.scheduler = widgetValues[5];
+      if (widgetValues[6] !== undefined) inputs.denoise = widgetValues[6];
+      break;
+    case 'EmptyLatentImage':
+      if (widgetValues[0] !== undefined) inputs.width = widgetValues[0];
+      if (widgetValues[1] !== undefined) inputs.height = widgetValues[1];
+      if (widgetValues[2] !== undefined) inputs.batch_size = widgetValues[2];
+      break;
+    case 'SaveImage':
+      if (widgetValues[0]) inputs.filename_prefix = widgetValues[0];
+      break;
+    case 'UpscaleModelLoader':
+      if (widgetValues[0]) inputs.model_name = widgetValues[0];
+      break;
+    // Handle Power Lora Loader (rgthree) format
+    case 'Power Lora Loader (rgthree)':
+      // This node type stores LoRA configs in the widget values differently
+      for (let i = 0; i < widgetValues.length; i++) {
+        const value = widgetValues[i];
+        if (typeof value === 'object' && value !== null) {
+          inputs[`lora_${i + 1}`] = value;
+        }
+      }
+      break;
+    // Generic handling for other node types
+    default:
+      // Try to extract common fields
+      if (widgetValues[0] && typeof widgetValues[0] === 'string') {
+        // First widget value is often the main parameter
+        if (classType.includes('Text')) {
+          inputs.text = widgetValues[0];
+        } else if (classType.includes('Lora') || classType.includes('LoRA')) {
+          inputs.lora = widgetValues[0];
+          if (widgetValues[1] !== undefined) inputs.strength = widgetValues[1];
+        } else if (classType.includes('Model') || classType.includes('Checkpoint')) {
+          inputs.model_name = widgetValues[0];
+        }
+      }
+      break;
+  }
+
+  // Handle node connections (from inputs array)
+  if (node.inputs && Array.isArray(node.inputs)) {
+    node.inputs.forEach((input: any, index: number) => {
+      if (input && input.link !== null && input.name) {
+        // This is a connected input, store the connection info
+        inputs[input.name] = { link: input.link };
+      }
+    });
+  }
+
+  return inputs;
 }

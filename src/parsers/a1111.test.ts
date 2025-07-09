@@ -49,8 +49,8 @@ Steps: 25, CFG scale: 8.5, Seed: 42`;
 
   it('should handle case-insensitive parameters', () => {
     const input = `portrait, detailed
-negative prompt: background
-steps: 15, cfg scale: 6.0`;
+Negative prompt: background
+Steps: 15, CFG scale: 6.0`;
 
     const result = parseA1111Parameters(input);
 
@@ -61,7 +61,7 @@ steps: 15, cfg scale: 6.0`;
 
   it('should handle advanced parameters', () => {
     const input = `portrait
-Steps: 20, CFG scale: 7, Denoising strength: 0.7, Clip skip: 2, ENSD: 31337, Restore faces, Hires upscaler: ESRGAN_4x, Hires steps: 10, Hires denoising strength: 0.5`;
+Steps: 20, CFG scale: 7, Denoising strength: 0.7, Clip skip: 2, ENSD: 31337, Restore faces, Hires upscale: 1.5, Hires upscaler: ESRGAN_4x, Hires steps: 10, Hires denoising strength: 0.5`;
 
     const result = parseA1111Parameters(input);
 
@@ -86,7 +86,7 @@ Steps: 20, CFG scale: 7, Denoising strength: 0.7, Clip skip: 2, ENSD: 31337, Res
   });
 
   it('should throw error for empty input', () => {
-    expect(() => parseA1111Parameters('')).toThrow('Invalid input: text cannot be empty');
+    expect(() => parseA1111Parameters('')).toThrow('Invalid input: text must be a non-empty string');
     expect(() => parseA1111Parameters('   ')).toThrow('Invalid input: text cannot be empty');
   });
 

@@ -175,6 +175,62 @@ export function extractExifSection(buffer: Buffer, sectionType: string): Buffer 
 }
 
 /**
+ * バイナリデータからJSONを検索して解析
+ * @param buffer - 検索対象のバッファ
+ * @returns 解析されたJSONオブジェクト、見つからない場合はnull
+ */
+export function findJsonInBinary(buffer: Buffer): any {
+  const text = buffer.toString('utf8');
+  // より柔軟なJSON検索パターン
+  const jsonMatches = text.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g);
+  
+  if (!jsonMatches) return null;
+  
+  for (const match of jsonMatches) {
+    try {
+      return JSON.parse(match);
+    } catch {
+      // 無効なJSONは無視して次を試す
+      continue;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * EXIFデータを解析
+ * @param buffer - EXIFデータのバッファ
+ * @returns 解析されたEXIFデータ、失敗時はnull
+ */
+export function parseExifData(buffer: Buffer): any {
+  if (buffer.length === 0) return null;
+  
+  // Exifヘッダーをチェック
+  const exifHeader = buffer.slice(0, 6);
+  if (exifHeader.toString('ascii') !== 'Exif\0\0') {
+    return null;
+  }
+  
+  // 基本的なEXIF構造を確認
+  if (buffer.length < 14) return null;
+  
+  // TIFFヘッダーをチェック
+  const tiffStart = 6;
+  const endian = buffer.readUInt16LE(tiffStart);
+  
+  if (endian !== 0x4949 && endian !== 0x4D4D) {
+    return null;
+  }
+  
+  // 最低限の有効なEXIFオブジェクトを返す
+  return {
+    exif: true,
+    endian: endian === 0x4949 ? 'little' : 'big'
+  };
+}
+
+/**
  * JSONパターンをバイナリデータから抽出
  * @param buffer - 検索対象のバッファ
  * @param encoding - エンコーディング
@@ -190,50 +246,66 @@ export function extractJsonPatterns(buffer: Buffer, encoding: BufferEncoding = '
  * バイナリデータから構造化データを抽出するためのパーサー
  */
 export class BinaryParser {
-  private buffer: Buffer;
-  private position: number = 0;
+  public buffer: Buffer;
+  public position: number = 0;
+  public length: number;
+  public isLittleEndian: boolean;
   
   constructor(buffer: Buffer) {
     this.buffer = buffer;
+    this.length = buffer.length;
+    
+    // バイト順序を検出
+    if (buffer.length >= 2) {
+      const first16 = buffer.readUInt16BE(0);
+      if (first16 === 0x4949) {
+        this.isLittleEndian = true;
+      } else if (first16 === 0x4D4D) {
+        this.isLittleEndian = false;
+      } else {
+        this.isLittleEndian = true; // デフォルト
+      }
+    } else {
+      this.isLittleEndian = true;
+    }
   }
   
   /**
-   * 現在位置を取得
+   * 8ビット符号なし整数を読み取り
    */
-  getPosition(): number {
-    return this.position;
-  }
-  
-  /**
-   * 位置を設定
-   */
-  setPosition(position: number): void {
-    this.position = Math.max(0, Math.min(position, this.buffer.length));
-  }
-  
-  /**
-   * 指定したバイト数を読み取り
-   */
-  readBytes(length: number): Buffer {
-    const result = this.buffer.slice(this.position, this.position + length);
-    this.position += length;
-    return result;
-  }
-  
-  /**
-   * 32ビット整数を読み取り（ビッグエンディアン）
-   */
-  readUInt32BE(): number {
-    const value = this.buffer.readUInt32BE(this.position);
-    this.position += 4;
+  readUInt8(): number {
+    if (this.position >= this.buffer.length) {
+      throw new Error('Cannot read beyond buffer length');
+    }
+    const value = this.buffer.readUInt8(this.position);
+    this.position += 1;
     return value;
   }
   
   /**
-   * 32ビット整数を読み取り（リトルエンディアン）
+   * 16ビット符号なし整数を読み取り
    */
-  readUInt32LE(): number {
-    const value = this.buffer.readUInt32LE(this.position);
+  readUInt16(): number {
+    if (this.position + 2 > this.buffer.length) {
+      throw new Error('Cannot read beyond buffer length');
+    }
+    const value = this.isLittleEndian 
+      ? this.buffer.readUInt16LE(this.position)
+      : this.buffer.readUInt16BE(this.position);
+    this.position += 2;
+    return value;
+  }
+  
+  /**
+   * 32ビット符号なし整数を読み取り
+   */
+  readUInt32(): number {
+    if (this.position + 4 > this.buffer.length) {
+      throw new Error('Cannot read beyond buffer length');
+    }
+    const value = this.isLittleEndian 
+      ? this.buffer.readUInt32LE(this.position)
+      : this.buffer.readUInt32BE(this.position);
     this.position += 4;
     return value;
   }
@@ -241,23 +313,100 @@ export class BinaryParser {
   /**
    * 文字列を読み取り
    */
-  readString(length: number, encoding: BufferEncoding = 'utf8'): string {
-    const result = this.buffer.slice(this.position, this.position + length).toString(encoding);
+  readString(length?: number): string {
+    if (length !== undefined) {
+      if (this.position + length > this.buffer.length) {
+        throw new Error('Cannot read beyond buffer length');
+      }
+      const result = this.buffer.slice(this.position, this.position + length).toString('utf8');
+      this.position += length;
+      return result;
+    } else {
+      // null終端文字列を読み取り
+      const start = this.position;
+      while (this.position < this.buffer.length && this.buffer[this.position] !== 0) {
+        this.position++;
+      }
+      const result = this.buffer.slice(start, this.position).toString('utf8');
+      if (this.position < this.buffer.length) {
+        this.position++; // null文字をスキップ
+      }
+      return result;
+    }
+  }
+  
+  /**
+   * 指定したバイト数を読み取り
+   */
+  readBytes(length: number): Buffer {
+    if (this.position + length > this.buffer.length) {
+      throw new Error('Cannot read beyond buffer length');
+    }
+    const result = this.buffer.slice(this.position, this.position + length);
     this.position += length;
     return result;
   }
   
   /**
-   * null終端文字列を読み取り
+   * 位置を設定
    */
-  readNullTerminatedString(encoding: BufferEncoding = 'utf8'): string {
-    const start = this.position;
-    while (this.position < this.buffer.length && this.buffer[this.position] !== 0) {
-      this.position++;
+  seek(position: number): void {
+    if (position < 0 || position > this.buffer.length) {
+      throw new Error('Seek position out of bounds');
     }
-    const result = this.buffer.slice(start, this.position).toString(encoding);
-    this.position++; // null文字をスキップ
-    return result;
+    this.position = position;
+  }
+  
+  /**
+   * バッファの一部をスライス
+   */
+  slice(lengthOrStart?: number, end?: number): Buffer {
+    if (end !== undefined) {
+      // 2つの引数がある場合は start, end として扱う
+      return this.buffer.slice(lengthOrStart || 0, end);
+    } else if (lengthOrStart !== undefined) {
+      // 1つの引数がある場合は length として扱う
+      return this.buffer.slice(this.position, this.position + lengthOrStart);
+    } else {
+      return this.buffer.slice(this.position);
+    }
+  }
+  
+  /**
+   * パターンを検索
+   */
+  findPattern(pattern: Buffer, startPos?: number): number {
+    const start = startPos !== undefined ? startPos : 0;
+    return findPattern(this.buffer, pattern, start);
+  }
+  
+  /**
+   * UTF-16テキストを抽出
+   */
+  extractUTF16Text(): string | null {
+    const unicodePrefix = Buffer.from('UNICODE\0');
+    const prefixPos = this.findPattern(unicodePrefix);
+    
+    if (prefixPos === -1) return null;
+    
+    const textStart = prefixPos + unicodePrefix.length;
+    const textData = this.buffer.slice(textStart);
+    
+    if (textData.length === 0) return '';
+    
+    try {
+      return textData.toString('utf16le');
+    } catch {
+      return null;
+    }
+  }
+  
+  /**
+   * テキストからJSONを抽出
+   */
+  extractJSONFromText(): any {
+    const text = this.buffer.toString('utf8');
+    return findJsonInBinary(Buffer.from(text));
   }
   
   /**

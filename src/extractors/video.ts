@@ -49,7 +49,7 @@ export async function extractFromVideo(
           }
         } catch (e) {
           // Try to find JSON patterns in the string
-          const jsonMatch = value.match(/\{[^}]+\}/);
+          const jsonMatch = value.match(/\{[\s\S]*?\}/);
           if (jsonMatch) {
             try {
               const parsed = JSON.parse(jsonMatch[0]);
@@ -77,7 +77,7 @@ export async function extractFromVideo(
             try {
               const parsed = JSON.parse(value);
               if (validateComfyUIWorkflow(parsed)) {
-                result.workflow = parsed.workflwo;
+                result.workflow = parsed.workflow;
                 break;
               }
             } catch (e) {
@@ -164,4 +164,3 @@ async function getVideoMetadata(
     });
   });
 }
-

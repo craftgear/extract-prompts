@@ -468,6 +468,8 @@ export interface ExtractedWorkflowData {
     cfg_start?: number;
     /** CFG終了値 */
     cfg_end?: number;
+    /** サンプラー名 */
+    sampler?: string;
     /** スケジューラー */
     scheduler?: string;
     /** シード値 */
