@@ -108,160 +108,214 @@ function extractUpscalerInfo(parameters) {
 }
 function generateComfyUIWorkflow(params) {
     let nodeId = params.startNodeId;
-    const prompt = {};
+    let linkId = 1;
+    const nodes = [];
+    const links = [];
     // サイズをパース
     const [width, height] = params.size.split('x').map(s => parseInt(s.trim()));
-    // 1. CheckpointLoaderSimple
-    const checkpointNodeId = nodeId++;
-    prompt[checkpointNodeId.toString()] = {
-        class_type: 'CheckpointLoaderSimple',
-        inputs: {
-            ckpt_name: params.model
+    // レイアウト設定
+    const nodeSpacing = { x: 250, y: 100 };
+    let currentPos = { x: 50, y: 50 };
+    // Helper function to create a node with proper inputs/outputs
+    function createNode(type, widgets_values = [], inputs = [], outputs = [], properties = {}, size = [315, 58]) {
+        const node = {
+            id: nodeId,
+            type,
+            pos: [currentPos.x, currentPos.y],
+            size,
+            flags: {},
+            order: nodeId - params.startNodeId,
+            mode: 0,
+            inputs,
+            outputs,
+            properties: {
+                cnr_id: "comfy-core",
+                ver: "0.3.43",
+                "Node name for S&R": type,
+                ...properties
+            },
+            widgets_values
+        };
+        nodes.push(node);
+        currentPos.y += nodeSpacing.y;
+        return nodeId++;
+    }
+    // Helper function to create a link and update node connections
+    function createLink(outputNodeId, outputSlot, inputNodeId, inputSlot, type) {
+        const currentLinkId = linkId++;
+        const link = [currentLinkId, outputNodeId, outputSlot, inputNodeId, inputSlot, type];
+        links.push(link);
+        // Find and update the output node
+        const outputNode = nodes.find(n => n.id === outputNodeId);
+        if (outputNode && outputNode.outputs[outputSlot]) {
+            if (!outputNode.outputs[outputSlot].links) {
+                outputNode.outputs[outputSlot].links = [];
+            }
+            outputNode.outputs[outputSlot].links.push(currentLinkId);
         }
-    };
+        // Find and update the input node
+        const inputNode = nodes.find(n => n.id === inputNodeId);
+        if (inputNode && inputNode.inputs[inputSlot]) {
+            inputNode.inputs[inputSlot].link = currentLinkId;
+        }
+        return link;
+    }
+    // 1. CheckpointLoaderSimple
+    currentPos.x = 50;
+    const checkpointNodeId = createNode('CheckpointLoaderSimple', [params.model], [], // no inputs
+    [
+        { name: "MODEL", type: "MODEL", slot_index: 0 },
+        { name: "CLIP", type: "CLIP", slot_index: 1 },
+        { name: "VAE", type: "VAE", slot_index: 2 }
+    ], {}, [350, 98]);
     // 2. LoRAローダーチェーンを作成
     let modelConnectionNode = checkpointNodeId;
     let clipConnectionNode = checkpointNodeId;
+    currentPos.x = 350;
+    currentPos.y = 50;
     for (const lora of params.loras) {
-        const loraNodeId = nodeId++;
-        prompt[loraNodeId.toString()] = {
-            class_type: 'LoraLoader',
-            inputs: {
-                model: [modelConnectionNode.toString(), 0],
-                clip: [clipConnectionNode.toString(), 1],
-                lora_name: lora.name,
-                strength_model: lora.strength,
-                strength_clip: lora.strength
-            }
-        };
+        const loraNodeId = createNode('LoraLoader', [lora.path, lora.strength, lora.strength], [
+            { name: "model", type: "MODEL", link: null },
+            { name: "clip", type: "CLIP", link: null }
+        ], [
+            { name: "MODEL", type: "MODEL", slot_index: 0 },
+            { name: "CLIP", type: "CLIP", slot_index: 1 }
+        ], {}, [315, 126]);
+        // Create links for LoRA
+        createLink(modelConnectionNode, 0, loraNodeId, 0, 'MODEL');
+        createLink(clipConnectionNode, 1, loraNodeId, 1, 'CLIP');
         modelConnectionNode = loraNodeId;
         clipConnectionNode = loraNodeId;
     }
     // 3. CLIPTextEncode (Positive)
-    const positivePromptNodeId = nodeId++;
-    prompt[positivePromptNodeId.toString()] = {
-        class_type: 'CLIPTextEncode',
-        inputs: {
-            text: params.positivePrompt,
-            clip: [clipConnectionNode.toString(), 1]
-        }
-    };
+    currentPos.x = 650;
+    currentPos.y = 50;
+    const positivePromptNodeId = createNode('CLIPTextEncode', [params.positivePrompt], [
+        { name: "clip", type: "CLIP", link: null }
+    ], [
+        { name: "CONDITIONING", type: "CONDITIONING", slot_index: 0 }
+    ], {}, [422, 164]);
+    createLink(clipConnectionNode, 1, positivePromptNodeId, 0, 'CLIP');
     // 4. CLIPTextEncode (Negative)
-    const negativePromptNodeId = nodeId++;
-    prompt[negativePromptNodeId.toString()] = {
-        class_type: 'CLIPTextEncode',
-        inputs: {
-            text: params.negativePrompt,
-            clip: [clipConnectionNode.toString(), 1]
-        }
-    };
+    currentPos.y += 50;
+    const negativePromptNodeId = createNode('CLIPTextEncode', [params.negativePrompt], [
+        { name: "clip", type: "CLIP", link: null }
+    ], [
+        { name: "CONDITIONING", type: "CONDITIONING", slot_index: 0 }
+    ], {}, [422, 164]);
+    createLink(clipConnectionNode, 1, negativePromptNodeId, 0, 'CLIP');
     // 5. EmptyLatentImage
-    const latentNodeId = nodeId++;
-    prompt[latentNodeId.toString()] = {
-        class_type: 'EmptyLatentImage',
-        inputs: {
-            width: width || 512,
-            height: height || 512,
-            batch_size: 1
-        }
-    };
+    currentPos.x = 50;
+    currentPos.y = 300;
+    const emptyLatentImageNodeId = createNode('EmptyLatentImage', [width, height, 1], [], // no inputs
+    [
+        { name: "LATENT", type: "LATENT", slot_index: 0 }
+    ], {}, [315, 106]);
     // 6. KSampler
-    const samplerNodeId = nodeId++;
-    prompt[samplerNodeId.toString()] = {
-        class_type: 'KSampler',
-        inputs: {
-            model: [modelConnectionNode.toString(), 0],
-            positive: [positivePromptNodeId.toString(), 0],
-            negative: [negativePromptNodeId.toString(), 0],
-            latent_image: [latentNodeId.toString(), 0],
-            seed: params.seed,
-            steps: params.steps,
-            cfg: params.cfg,
-            sampler_name: params.sampler,
-            scheduler: 'normal',
-            denoise: 1.0
-        }
-    };
-    let finalLatentNode = samplerNodeId;
-    // 7. アップスケーラーがある場合の処理
+    currentPos.x = 950;
+    currentPos.y = 50;
+    const ksamplerNodeId = createNode('KSampler', [params.seed, 'randomize', params.steps, params.cfg, params.sampler, 'normal', 1.0], [
+        { name: "model", type: "MODEL", link: null },
+        { name: "positive", type: "CONDITIONING", link: null },
+        { name: "negative", type: "CONDITIONING", link: null },
+        { name: "latent_image", type: "LATENT", link: null }
+    ], [
+        { name: "LATENT", type: "LATENT", slot_index: 0 }
+    ], {}, [315, 262]);
+    // Create links for KSampler
+    createLink(modelConnectionNode, 0, ksamplerNodeId, 0, 'MODEL');
+    createLink(positivePromptNodeId, 0, ksamplerNodeId, 1, 'CONDITIONING');
+    createLink(negativePromptNodeId, 0, ksamplerNodeId, 2, 'CONDITIONING');
+    createLink(emptyLatentImageNodeId, 0, ksamplerNodeId, 3, 'LATENT');
+    let finalLatentOutput = ksamplerNodeId;
+    // アップスケーラー処理を追加
     if (params.upscaler) {
+        currentPos.x = 50;
+        currentPos.y = 450;
         // UpscaleModelLoader
-        const upscaleLoaderNodeId = nodeId++;
-        prompt[upscaleLoaderNodeId.toString()] = {
-            class_type: 'UpscaleModelLoader',
-            inputs: {
-                model_name: params.upscaler.model
-            }
-        };
-        // VAEDecode (first)
-        const vaeDecodeNodeId = nodeId++;
-        prompt[vaeDecodeNodeId.toString()] = {
-            class_type: 'VAEDecode',
-            inputs: {
-                samples: [samplerNodeId.toString(), 0],
-                vae: [checkpointNodeId.toString(), 2]
-            }
-        };
+        const upscaleModelLoaderNodeId = createNode('UpscaleModelLoader', [params.upscaler.model], [], // no inputs
+        [
+            { name: "UPSCALE_MODEL", type: "UPSCALE_MODEL", slot_index: 0 }
+        ], {}, [315, 58]);
+        // VAEDecode (for upscaling)
+        currentPos.x = 350;
+        const vaeDecodeUpscaleNodeId = createNode('VAEDecode', [], [
+            { name: "samples", type: "LATENT", link: null },
+            { name: "vae", type: "VAE", link: null }
+        ], [
+            { name: "IMAGE", type: "IMAGE", slot_index: 0 }
+        ], {}, [210, 46]);
+        createLink(finalLatentOutput, 0, vaeDecodeUpscaleNodeId, 0, 'LATENT');
+        createLink(checkpointNodeId, 2, vaeDecodeUpscaleNodeId, 1, 'VAE');
         // ImageUpscaleWithModel
-        const imageUpscaleNodeId = nodeId++;
-        prompt[imageUpscaleNodeId.toString()] = {
-            class_type: 'ImageUpscaleWithModel',
-            inputs: {
-                upscale_model: [upscaleLoaderNodeId.toString(), 0],
-                image: [vaeDecodeNodeId.toString(), 0]
-            }
-        };
+        const imageUpscaleNodeId = createNode('ImageUpscaleWithModel', [], [
+            { name: "upscale_model", type: "UPSCALE_MODEL", link: null },
+            { name: "image", type: "IMAGE", link: null }
+        ], [
+            { name: "IMAGE", type: "IMAGE", slot_index: 0 }
+        ], {}, [315, 126]);
+        createLink(upscaleModelLoaderNodeId, 0, imageUpscaleNodeId, 0, 'UPSCALE_MODEL');
+        createLink(vaeDecodeUpscaleNodeId, 0, imageUpscaleNodeId, 1, 'IMAGE');
         // VAEEncode
-        const vaeEncodeNodeId = nodeId++;
-        prompt[vaeEncodeNodeId.toString()] = {
-            class_type: 'VAEEncode',
-            inputs: {
-                pixels: [imageUpscaleNodeId.toString(), 0],
-                vae: [checkpointNodeId.toString(), 2]
-            }
-        };
+        const vaeEncodeNodeId = createNode('VAEEncode', [], [
+            { name: "pixels", type: "IMAGE", link: null },
+            { name: "vae", type: "VAE", link: null }
+        ], [
+            { name: "LATENT", type: "LATENT", slot_index: 0 }
+        ], {}, [210, 46]);
+        createLink(imageUpscaleNodeId, 0, vaeEncodeNodeId, 0, 'IMAGE');
+        createLink(checkpointNodeId, 2, vaeEncodeNodeId, 1, 'VAE');
         // Second KSampler for hires pass
-        const hiresSamplerNodeId = nodeId++;
-        prompt[hiresSamplerNodeId.toString()] = {
-            class_type: 'KSampler',
-            inputs: {
-                model: [modelConnectionNode.toString(), 0],
-                positive: [positivePromptNodeId.toString(), 0],
-                negative: [negativePromptNodeId.toString(), 0],
-                latent_image: [vaeEncodeNodeId.toString(), 0],
-                seed: params.seed,
-                steps: params.upscaler.steps || 10,
-                cfg: params.cfg,
-                sampler_name: params.sampler,
-                scheduler: 'normal',
-                denoise: params.upscaler.denoising || 0.5
-            }
-        };
-        finalLatentNode = hiresSamplerNodeId;
+        const hiresSamplerNodeId = createNode('KSampler', [params.seed, 'randomize', params.upscaler.steps || 10, params.cfg, params.sampler, 'normal', params.upscaler.denoising || 0.5], [
+            { name: "model", type: "MODEL", link: null },
+            { name: "positive", type: "CONDITIONING", link: null },
+            { name: "negative", type: "CONDITIONING", link: null },
+            { name: "latent_image", type: "LATENT", link: null }
+        ], [
+            { name: "LATENT", type: "LATENT", slot_index: 0 }
+        ], {}, [315, 262]);
+        createLink(modelConnectionNode, 0, hiresSamplerNodeId, 0, 'MODEL');
+        createLink(positivePromptNodeId, 0, hiresSamplerNodeId, 1, 'CONDITIONING');
+        createLink(negativePromptNodeId, 0, hiresSamplerNodeId, 2, 'CONDITIONING');
+        createLink(vaeEncodeNodeId, 0, hiresSamplerNodeId, 3, 'LATENT');
+        finalLatentOutput = hiresSamplerNodeId;
     }
-    // 8. VAEDecode (final)
-    const finalVaeDecodeNodeId = nodeId++;
-    prompt[finalVaeDecodeNodeId.toString()] = {
-        class_type: 'VAEDecode',
-        inputs: {
-            samples: [finalLatentNode.toString(), 0],
-            vae: [checkpointNodeId.toString(), 2]
-        }
-    };
-    // 9. SaveImage
-    const saveImageNodeId = nodeId++;
-    prompt[saveImageNodeId.toString()] = {
-        class_type: 'SaveImage',
-        inputs: {
-            images: [finalVaeDecodeNodeId.toString(), 0],
-            filename_prefix: 'ComfyUI'
-        }
+    // Final VAEDecode
+    currentPos.x = 1300;
+    currentPos.y = 50;
+    const finalVaeDecodeNodeId = createNode('VAEDecode', [], [
+        { name: "samples", type: "LATENT", link: null },
+        { name: "vae", type: "VAE", link: null }
+    ], [
+        { name: "IMAGE", type: "IMAGE", slot_index: 0 }
+    ], {}, [210, 46]);
+    createLink(finalLatentOutput, 0, finalVaeDecodeNodeId, 0, 'LATENT');
+    createLink(checkpointNodeId, 2, finalVaeDecodeNodeId, 1, 'VAE');
+    // SaveImage
+    const saveImageNodeId = createNode('SaveImage', ['ComfyUI'], [
+        { name: "images", type: "IMAGE", link: null }
+    ], [], // no outputs
+    {}, [315, 58]);
+    createLink(finalVaeDecodeNodeId, 0, saveImageNodeId, 0, 'IMAGE');
+    // Generate UUID for workflow ID
+    const generateUUID = () => {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
     };
     return {
-        prompt,
-        extra_pnginfo: {
-            workflow: prompt
-        }
+        id: generateUUID(),
+        revision: 0,
+        last_node_id: nodeId - 1,
+        last_link_id: linkId - 1,
+        nodes,
+        links,
+        groups: [],
+        config: {},
+        extra: {},
+        version: 0.4
     };
 }
 /**

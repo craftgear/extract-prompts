@@ -92,23 +92,61 @@ program
             console.error('No workflow data found in any files');
             process.exit(1);
         }
-        const output = (0, output_1.formatOutput)(results, options.pretty ? 'pretty' : 'json');
-        if (options.save !== undefined) {
-            // If --save is specified without directory, use the directory of the first input file
-            const saveDirectory = (typeof options.save === 'string')
-                ? options.save
-                : (allFiles.length > 0 ? (0, path_1.dirname)(allFiles[0]) : './extracted');
-            await (0, save_1.saveExtractedData)(results, saveDirectory, {
-                format: (options.pretty ? 'pretty' : 'json'),
-                overwrite: options.overwrite || false,
-                namePattern: options.namePattern ||
-                    'source',
-                organize: options.organize || 'none',
-            });
-            console.log(`Saved ${results.length} file(s) to ${saveDirectory}`);
+        // Handle A1111 to ComfyUI conversion output differently  
+        if (options.convertA1111) {
+            const workflowResults = results.filter(result => result.workflow);
+            if (workflowResults.length === 0) {
+                console.error('No workflows generated from A1111 conversion');
+                process.exit(1);
+            }
+            // Always save individual workflow files when using --convert-a1111
+            let savedFiles = 0;
+            for (const result of workflowResults) {
+                const outputPath = (0, path_1.join)((0, path_1.dirname)(result.file), (0, path_1.basename)(result.file, (0, path_1.extname)(result.file)) + '_workflow.json');
+                const workflowContent = JSON.stringify(result.workflow, null, 2);
+                (0, fs_1.writeFileSync)(outputPath, workflowContent);
+                if (!options.quiet) {
+                    console.log(`Saved ComfyUI workflow: ${outputPath}`);
+                }
+                savedFiles++;
+            }
+            if (!options.quiet) {
+                console.log(`Generated ${savedFiles} ComfyUI workflow file(s)`);
+            }
+            // Handle additional --save option if specified (for saving in different location)
+            if (options.save !== undefined) {
+                const saveDirectory = (typeof options.save === 'string')
+                    ? options.save
+                    : (allFiles.length > 0 ? (0, path_1.dirname)(allFiles[0]) : './extracted');
+                await (0, save_1.saveExtractedData)(results, saveDirectory, {
+                    format: (options.pretty ? 'pretty' : 'json'),
+                    overwrite: options.overwrite || false,
+                    namePattern: options.namePattern ||
+                        'source',
+                    organize: options.organize || 'none',
+                });
+                console.log(`Also saved ${results.length} file(s) to ${saveDirectory}`);
+            }
         }
         else {
-            console.log(output);
+            // Normal extraction mode
+            const output = (0, output_1.formatOutput)(results, options.pretty ? 'pretty' : 'json');
+            if (options.save !== undefined) {
+                const saveDirectory = (typeof options.save === 'string')
+                    ? options.save
+                    : (allFiles.length > 0 ? (0, path_1.dirname)(allFiles[0]) : './extracted');
+                await (0, save_1.saveExtractedData)(results, saveDirectory, {
+                    format: (options.pretty ? 'pretty' : 'json'),
+                    overwrite: options.overwrite || false,
+                    namePattern: options.namePattern ||
+                        'source',
+                    organize: options.organize || 'none',
+                });
+                console.log(`Saved ${results.length} file(s) to ${saveDirectory}`);
+            }
+            else {
+                console.log(output);
+            }
         }
     }
     catch (error) {

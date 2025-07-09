@@ -43,12 +43,40 @@ export interface RawExtractionResult {
     user_comment?: string;
 }
 /**
- * ComfyUI workflow structure
+ * ComfyUI workflow structure (UI format)
  *
- * Represents the complete workflow data structure used by ComfyUI,
+ * Represents the complete workflow data structure used by ComfyUI UI,
+ * including version, nodes, links, and configuration.
+ */
+export interface ComfyUIUIWorkflow {
+    /** Unique workflow identifier */
+    id: string;
+    /** Workflow revision number */
+    revision: number;
+    /** Last assigned node ID */
+    last_node_id: number;
+    /** Last assigned link ID */
+    last_link_id: number;
+    /** Array of workflow nodes */
+    nodes: ComfyUIWorkflowNode[];
+    /** Array of node connections */
+    links: ComfyUIWorkflowLink[];
+    /** Node groups */
+    groups: any[];
+    /** Workflow configuration */
+    config: Record<string, any>;
+    /** Extra metadata */
+    extra: Record<string, any>;
+    /** Workflow format version */
+    version: number;
+}
+/**
+ * ComfyUI workflow structure (API format - legacy)
+ *
+ * Represents the API format workflow structure used by ComfyUI,
  * including prompt information and node definitions.
  */
-export interface ComfyUIWorkflow {
+export interface ComfyUIAPIWorkflow {
     /** Workflow prompt information */
     prompt?: string | ComfyUIPrompt;
     /** Additional PNG metadata information */
@@ -57,7 +85,51 @@ export interface ComfyUIWorkflow {
     [key: string]: any;
 }
 /**
- * Detailed ComfyUI prompt structure
+ * ComfyUI workflow structure (supports both UI and API formats)
+ *
+ * Union type that supports both the new UI format and legacy API format
+ * for backwards compatibility.
+ */
+export type ComfyUIWorkflow = ComfyUIUIWorkflow | ComfyUIAPIWorkflow;
+/**
+ * ComfyUI workflow node structure (UI format)
+ *
+ * Represents a single node in a ComfyUI UI workflow with positioning,
+ * sizing, and connection information.
+ */
+export interface ComfyUIWorkflowNode {
+    /** Unique node identifier */
+    id: number;
+    /** Node type/class name */
+    type: string;
+    /** Node position [x, y] */
+    pos: [number, number];
+    /** Node size [width, height] */
+    size: [number, number];
+    /** Node flags */
+    flags: Record<string, any>;
+    /** Node execution order */
+    order: number;
+    /** Node mode */
+    mode: number;
+    /** Node inputs */
+    inputs: any[];
+    /** Node outputs */
+    outputs: any[];
+    /** Node properties */
+    properties: Record<string, any>;
+    /** Node widget values */
+    widgets_values: any[];
+}
+/**
+ * ComfyUI workflow link structure (UI format)
+ *
+ * Represents a connection between two nodes in a ComfyUI UI workflow.
+ * Format: [link_id, output_node_id, output_slot, input_node_id, input_slot, type]
+ */
+export type ComfyUIWorkflowLink = [number, number, number, number, number, string];
+/**
+ * Detailed ComfyUI prompt structure (API format - for backwards compatibility)
  *
  * Maps node IDs to their corresponding ComfyUI node definitions.
  */

@@ -140,8 +140,8 @@ vitest_1.vi.mock('fs/promises', () => ({
             const result = await (0, png_js_1.extractFromPNG)('test.png');
             (0, vitest_1.expect)(result).toBeDefined();
             (0, vitest_1.expect)(result?.workflow).toBeDefined();
-            (0, vitest_1.expect)(result?.workflow['1']).toBeDefined();
-            (0, vitest_1.expect)(result?.workflow['1'].class_type).toBe('CheckpointLoaderSimple');
+            (0, vitest_1.expect)((result?.workflow)['1']).toBeDefined();
+            (0, vitest_1.expect)((result?.workflow)['1'].class_type).toBe('CheckpointLoaderSimple');
         });
         (0, vitest_1.it)('should return null when no relevant text chunks are found', async () => {
             const fs = await Promise.resolve().then(() => __importStar(require('fs/promises')));
