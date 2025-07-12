@@ -4,6 +4,73 @@ import { ExtractedData } from '../types';
 
 describe('formatOutput', () => {
   describe('ComfyUI UI format workflow pretty printing', () => {
+    it('should extract negative prompts from WanVideoTextEncode nodes', () => {
+      const workflow = {
+        id: 'test-workflow',
+        nodes: [
+          {
+            id: 1,
+            type: 'WanVideoTextEncode',
+            widgets_values: [
+              'a beautiful sunset over mountains',
+              'blurry, low quality, distorted',
+              true
+            ]
+          },
+          {
+            id: 2,
+            type: 'WanVideoTextEncode',
+            widgets_values: [
+              'a serene lake with reflections',
+              'noise, artifacts, jpeg compression',
+              true
+            ]
+          }
+        ],
+        links: []
+      };
+
+      const result: ExtractedData = { workflow };
+      const output = formatOutput('test.mp4', result, 'pretty');
+
+      // Should contain both positive and negative prompts
+      expect(output).toContain('a beautiful sunset over mountains');
+      expect(output).toContain('blurry, low quality, distorted');
+      expect(output).toContain('a serene lake with reflections');
+      expect(output).toContain('noise, artifacts, jpeg compression');
+      expect(output).toContain('Prompts:');
+    });
+
+    it('should extract sampler settings from WanVideoSampler nodes', () => {
+      const workflow = {
+        id: 'test-workflow',
+        nodes: [
+          {
+            id: 1,
+            type: 'WanVideoSampler',
+            widgets_values: [
+              2,      // index 0: not used
+              6,      // index 1: not used
+              5,      // index 2: steps
+              98662,  // index 3: seed
+              'euler',// index 4: sampler_name
+              true,   // index 5: not used
+              'lcm'   // index 6: scheduler
+            ]
+          }
+        ],
+        links: []
+      };
+
+      const result: ExtractedData = { workflow };
+      const output = formatOutput('test.mp4', result, 'pretty');
+
+      expect(output).toContain('Steps: 5');
+      expect(output).toContain('Seed: 98662');
+      expect(output).toContain('Sampler: euler');
+      expect(output).toContain('Scheduler: lcm');
+    });
+
     it('should extract and display complete sampler settings from UI format workflow', () => {
       const uiFormatWorkflow = {
         id: 'test-workflow',
@@ -245,7 +312,7 @@ describe('formatOutput', () => {
           {
             id: 1,
             type: 'WanVideoSampler',
-            widgets_values: [999, 'randomize', 15, 6.0, 'ddim', 'normal', 0.9],
+            widgets_values: [2, 6, 15, 999, 'ddim', true, 'normal'],
             inputs: [],
             outputs: []
           }
@@ -258,11 +325,9 @@ describe('formatOutput', () => {
 
       expect(result).toContain('Sampler Settings:');
       expect(result).toContain('Steps: 15');
-      expect(result).toContain('CFG Scale: 6');
       expect(result).toContain('Sampler: ddim');
       expect(result).toContain('Scheduler: normal');
       expect(result).toContain('Seed: 999');
-      expect(result).toContain('Denoise: 0.9');
     });
 
     it('should handle nodes with Sampler in class name', () => {

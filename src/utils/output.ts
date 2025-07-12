@@ -536,14 +536,23 @@ function extractInputsFromUINode(node: any): Record<string, any> {
     case 'CLIPTextEncode':
       if (widgetValues[0]) inputs.text = widgetValues[0];
       break;
+    case 'WanVideoTextEncode':
+      if (widgetValues[0]) inputs.text = widgetValues[0];
+      if (widgetValues[1]) inputs.negative_prompt = widgetValues[1];
+      break;
     case 'KSampler':
-    case 'WanVideoSampler':
       if (widgetValues[0] !== undefined) inputs.seed = widgetValues[0];
       if (widgetValues[2] !== undefined) inputs.steps = widgetValues[2];
       if (widgetValues[3] !== undefined) inputs.cfg = widgetValues[3];
       if (widgetValues[4]) inputs.sampler_name = widgetValues[4];
       if (widgetValues[5]) inputs.scheduler = widgetValues[5];
       if (widgetValues[6] !== undefined) inputs.denoise = widgetValues[6];
+      break;
+    case 'WanVideoSampler':
+      if (widgetValues[3] !== undefined) inputs.seed = widgetValues[3];
+      if (widgetValues[2] !== undefined) inputs.steps = widgetValues[2];
+      if (widgetValues[4]) inputs.sampler_name = widgetValues[4];
+      if (widgetValues[6]) inputs.scheduler = widgetValues[6];
       break;
     case 'EmptyLatentImage':
       if (widgetValues[0] !== undefined) inputs.width = widgetValues[0];
