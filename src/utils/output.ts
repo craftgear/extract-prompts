@@ -549,10 +549,11 @@ function extractInputsFromUINode(node: any): Record<string, any> {
       if (widgetValues[6] !== undefined) inputs.denoise = widgetValues[6];
       break;
     case 'WanVideoSampler':
+      if (widgetValues[0] !== undefined) inputs.steps = widgetValues[0];
+      if (widgetValues[1] !== undefined) inputs.cfg = widgetValues[1];
       if (widgetValues[3] !== undefined) inputs.seed = widgetValues[3];
-      if (widgetValues[2] !== undefined) inputs.steps = widgetValues[2];
-      if (widgetValues[4]) inputs.sampler_name = widgetValues[4];
-      if (widgetValues[6]) inputs.scheduler = widgetValues[6];
+      if (widgetValues[6]) inputs.sampler_name = widgetValues[6];
+      if (widgetValues[10]) inputs.scheduler = widgetValues[10];
       break;
     case 'EmptyLatentImage':
       if (widgetValues[0] !== undefined) inputs.width = widgetValues[0];
@@ -564,6 +565,10 @@ function extractInputsFromUINode(node: any): Record<string, any> {
       break;
     case 'UpscaleModelLoader':
       if (widgetValues[0]) inputs.model_name = widgetValues[0];
+      break;
+    case 'CreateCFGScheduleFloatList':
+      if (widgetValues[0] !== undefined) inputs.cfg_scale_start = widgetValues[0];
+      if (widgetValues[1] !== undefined) inputs.cfg_scale_end = widgetValues[1];
       break;
     // Handle Power Lora Loader (rgthree) format
     case 'Power Lora Loader (rgthree)':

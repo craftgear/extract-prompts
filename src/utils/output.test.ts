@@ -49,13 +49,17 @@ describe('formatOutput', () => {
             id: 1,
             type: 'WanVideoSampler',
             widgets_values: [
-              2,      // index 0: not used
-              6,      // index 1: not used
-              5,      // index 2: steps
+              5,      // index 0: steps
+              6,      // index 1: cfg
+              2,      // index 2: unknown
               98662,  // index 3: seed
-              'euler',// index 4: sampler_name
+              'randomize',// index 4: randomize seed
               true,   // index 5: not used
-              'lcm'   // index 6: scheduler
+              'euler',// index 6: sampler
+              0,      // index 7: unknown
+              1,      // index 8: unknown
+              false,  // index 9: unknown
+              'normal'// index 10: scheduler
             ]
           }
         ],
@@ -66,9 +70,10 @@ describe('formatOutput', () => {
       const output = formatOutput('test.mp4', result, 'pretty');
 
       expect(output).toContain('Steps: 5');
+      expect(output).toContain('CFG Scale: 6');
       expect(output).toContain('Seed: 98662');
       expect(output).toContain('Sampler: euler');
-      expect(output).toContain('Scheduler: lcm');
+      expect(output).toContain('Scheduler: normal');
     });
 
     it('should extract and display complete sampler settings from UI format workflow', () => {
@@ -312,7 +317,7 @@ describe('formatOutput', () => {
           {
             id: 1,
             type: 'WanVideoSampler',
-            widgets_values: [2, 6, 15, 999, 'ddim', true, 'normal'],
+            widgets_values: [2, 6, 15, 999, 'randomize', true, 'ddim', 0, 1, false, 'normal'],
             inputs: [],
             outputs: []
           }
@@ -324,7 +329,8 @@ describe('formatOutput', () => {
       const result = formatOutput('wan_video.mp4', extractedData, 'pretty');
 
       expect(result).toContain('Sampler Settings:');
-      expect(result).toContain('Steps: 15');
+      expect(result).toContain('Steps: 2');
+      expect(result).toContain('CFG Scale: 6');
       expect(result).toContain('Sampler: ddim');
       expect(result).toContain('Scheduler: normal');
       expect(result).toContain('Seed: 999');

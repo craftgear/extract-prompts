@@ -18,6 +18,60 @@ import { UnsupportedFormatError } from './types';
 import pkg from '../package.json';
 const program = new Command();
 
+// Fix argument parsing when --save is used without a directory
+// Rearrange arguments to put files first, then options
+const rawArgs = process.argv.slice(2);
+const optionArgs = [];
+const fileArgs = [];
+let i = 0;
+
+while (i < rawArgs.length) {
+  const arg = rawArgs[i];
+  
+  if (arg.startsWith('-')) {
+    // It's an option
+    if ((arg === '--save' || arg === '-s') && i + 1 < rawArgs.length) {
+      const nextArg = rawArgs[i + 1];
+      // Check if next argument looks like a file (has image/video extension)
+      if (!nextArg.startsWith('-') && nextArg.match(/\.(png|jpg|jpeg|webp|mp4|webm|mov)$/i)) {
+        // Add --save without value
+        optionArgs.push(arg);
+        // The file will be picked up in the next iteration
+        i++;
+      } else if (!nextArg.startsWith('-')) {
+        // Normal --save with directory
+        optionArgs.push(arg);
+        optionArgs.push(nextArg);
+        i += 2;
+      } else {
+        // --save with no value
+        optionArgs.push(arg);
+        i++;
+      }
+    } else {
+      // Other options
+      optionArgs.push(arg);
+      // Check if this option has a value
+      if (i + 1 < rawArgs.length && !rawArgs[i + 1].startsWith('-')) {
+        const nextArg = rawArgs[i + 1];
+        // Skip if it's a file (will be added to fileArgs)
+        if (!nextArg.match(/\.(png|jpg|jpeg|webp|mp4|webm|mov)$/i)) {
+          optionArgs.push(nextArg);
+          i++;
+        }
+      }
+      i++;
+    }
+  } else {
+    // It's a file or directory
+    fileArgs.push(arg);
+    i++;
+  }
+}
+
+// Reconstruct arguments with files first, then options
+const fixedArgs = [...fileArgs, ...optionArgs];
+
 program
   .name('extract-prompts')
   .description('Extract ComfyUI workflow JSON from images and videos')
@@ -348,4 +402,6 @@ async function extractWorkflow(filePath: string) {
   }
 }
 
-program.parse();
+
+// Use the fixed arguments
+program.parse(['node', 'extract-prompts', ...fixedArgs]);
