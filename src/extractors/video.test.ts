@@ -105,6 +105,35 @@ describe('extractFromVideo', () => {
       expect(result).toEqual({ workflow: mockWorkflow });
     });
 
+    it('should extract when tag contains the workflow object directly', async () => {
+      const mockWorkflow = {
+        nodes: [
+          { id: 1, type: 'KSampler' },
+          { id: 2, type: 'CLIPTextEncode', widgets_values: ['hello'] },
+        ],
+        links: [],
+      };
+
+      const ffprobeOutput = JSON.stringify({
+        format: {
+          tags: {
+            // Store the workflow JSON directly (no wrapper)
+            workflow: JSON.stringify(mockWorkflow),
+          },
+        },
+        streams: [],
+      });
+
+      mockSpawn.mockReturnValue(createMockProcess(ffprobeOutput));
+      mockValidateComfyUIWorkflow.mockReturnValue(true);
+
+      const result = await extractFromVideo('/test/direct_workflow.mp4');
+
+      // Expect extractor to accept the direct workflow object
+      expect(result).toEqual({ workflow: mockWorkflow });
+      expect(mockValidateComfyUIWorkflow).toHaveBeenCalledWith(mockWorkflow);
+    });
+
     it('should extract workflow from ComfyUI-specific fields', async () => {
       const mockWorkflow = {
         nodes: [
@@ -408,4 +437,3 @@ describe('extractFromVideo', () => {
     });
   });
 });
-

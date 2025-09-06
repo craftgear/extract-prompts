@@ -44,7 +44,8 @@ export async function extractFromVideo(
         try {
           const parsed = JSON.parse(value);
           if (validateComfyUIWorkflow(parsed)) {
-            result.workflow = parsed.workflow;
+            // 一部のエンコーダはラッパー({ workflow: {...} })ではなく、ワークフロー本体を直接保存する
+            result.workflow = (parsed as any).workflow ?? parsed;
             break;
           }
         } catch (e) {
@@ -54,7 +55,8 @@ export async function extractFromVideo(
             try {
               const parsed = JSON.parse(jsonMatch[0]);
               if (validateComfyUIWorkflow(parsed)) {
-                result.workflow = parsed.workflow;
+                // ラッパー有無に関係なく取り出す
+                result.workflow = (parsed as any).workflow ?? parsed;
                 break;
               }
             } catch (e) {
@@ -77,7 +79,8 @@ export async function extractFromVideo(
             try {
               const parsed = JSON.parse(value);
               if (validateComfyUIWorkflow(parsed)) {
-                result.workflow = parsed.workflow;
+                // ラッパー有無に関係なく取り出す
+                result.workflow = (parsed as any).workflow ?? parsed;
                 break;
               }
             } catch (e) {
