@@ -10,6 +10,28 @@ vi.mock('../utils/validation');
 vi.mock('ffprobe-static', () => ({
   default: { path: '/mock/ffprobe' },
 }));
+vi.mock('./mp4-parser', () => ({
+  extractMP4Metadata: vi.fn(),
+}));
+vi.mock('./webm-parser', () => ({
+  extractWebMMetadata: vi.fn(),
+}));
+vi.mock('./cache', () => ({
+  metadataCache: {
+    get: vi.fn().mockReturnValue(null),
+    set: vi.fn(),
+    clear: vi.fn(),
+    delete: vi.fn(),
+    size: vi.fn().mockReturnValue(0),
+  },
+}));
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal() as any;
+  return {
+    ...actual,
+    readFileSync: vi.fn(),
+  };
+});
 
 const mockValidateComfyUIWorkflow = vi.mocked(validateComfyUIWorkflow);
 const mockSpawn = vi.mocked(spawn);
@@ -373,7 +395,12 @@ describe('extractFromVideo', () => {
         '-print_format',
         'json',
         '-show_format',
-        '-show_streams',
+        '-probesize',
+        '32M',
+        '-analyzeduration',
+        '5M',
+        '-read_intervals',
+        '%+#1',
         '/test/check_args.mp4',
       ]);
     });
